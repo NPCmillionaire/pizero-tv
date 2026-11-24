@@ -4,7 +4,7 @@
 
 pizero-tv turns a Raspberry Pi Zero 2 W and whatever TV you've stopped watching into an
 ambient intelligence wall: sixteen channels of live data, video and generative art, flipped like an old TV
-and controlled from any terminal on your network.
+and controlled from any terminal on your network. Every channel is its own station, with its own look.
 Guests will ask what you do for a living. Say "research." Leave it there.
 
 ![Markets](docs/img/finance.png)
@@ -30,24 +30,23 @@ decency to look like a wall.
 
 ## The screens
 
-| Spine | Module | What's on it | Where it comes from |
-|---|---|---|---|
-| WEATHER | `weather` | Temperature, the next 24 hours, where the sun is, the week | Open-Meteo |
-| MARKETS | `finance` | S&P 500, Nasdaq, Dow, Russell, a rotating spotlight stock, sectors, VIX, yields, gold, oil | Yahoo Finance |
-| CRYPTO | `crypto` | Bitcoin up close, the top coins (no stablecoins), market totals, fear and greed | CoinGecko, alternative.me |
-| THREATS | `threatmap` | The internet's threat level, most probed ports, where today's busiest attackers are | SANS Internet Storm Center, ip-api, abuse.ch |
-| AIRSPACE | `flights` | Every aircraft broadcasting within 60 nautical miles, on a radar scope | adsb.lol |
-| ORBIT | `space` | The ISS and its ground track, the real day/night line, space weather, the closest asteroid | wheretheiss.at, NOAA SWPC, NASA |
-| SIGNAL | `news` | Earthquakes worldwide and the Hacker News front page | USGS, Hacker News |
-| DISPATCH | `sfdispatch` | San Francisco police calls for service, on a street map | DataSF |
-| SYSTEM | `syshud` | The Pi itself: cores, memory, temperature, throttling, network | psutil, vcgencmd |
-| LAN | `lanradar` | Every device on your network, with newcomers flagged | your kernel's neighbor table, a ping sweep |
-| MATRIX | `matrix` | Digital rain in real katakana | art |
-| OUTRUN | `retro` | A synthwave road, the Game of Life, a nixie-tube clock | art |
-| TRIPPY | `trippy` | Generative color fields | art (and numpy) |
-| COMPUTERPHILE | `computerphile` | Computerphile videos, picked at random, back to back | YouTube via yt-dlp and mpv |
-| SHORTS | `shorts` | Science and engineering Shorts | YouTube via yt-dlp and mpv |
-| GUIDE | `guide` | Channel 00: what's on every channel | the channels themselves |
+| Ch | Channel | Looks like | What's on it | Where it comes from |
+|---|---|---|---|---|
+| 00 | GUIDE | The cable listings channel | What's on every channel, scrolling past | the channels themselves |
+| 01 | WEATHER | A local-forecast cable station | Conditions, the next 24 hours, the week, in pages, with a crawl | Open-Meteo |
+| 02 | MARKETS | A business-news desk | S&P 500 intraday, a spotlight stock, sectors, a two-line ticker | Yahoo Finance |
+| 03 | CRYPTO | A late-night neon trading show | Bitcoin, the board, a fear-and-greed dial | CoinGecko, alternative.me |
+| 04 | THREATS | An amber war-room CRT | The internet's threat level, most probed ports, where attackers are | SANS Internet Storm Center, ip-api, abuse.ch |
+| 05 | AIRSPACE | An approach-control scope | Aircraft within 60 nm, with paper flight strips | adsb.lol |
+| 06 | ORBIT | Mission control | The ISS, day and night on Earth, space weather | wheretheiss.at, NOAA SWPC, NASA |
+| 07 | SIGNAL | A breaking-news bulletin | Earthquakes worldwide, world clocks, the Hacker News front page | USGS, Hacker News |
+| 08 | DISPATCH | A police dispatch terminal | San Francisco police calls on a street map | DataSF |
+| 09 | SYSTEM | A BIOS setup screen | The Pi, plus any other machine you point it at | psutil, the stats agent |
+| 10 | LAN | Submarine sonar | Every device on your network, newcomers flagged | your neighbor table, a ping sweep |
+| 11–13 | MATRIX, OUTRUN, TRIPPY | Themselves | Digital rain, a synthwave road, generative color | art |
+| 14–15 | COMPUTERPHILE, SHORTS | Color bars, then the video | YouTube, full screen, with captions | yt-dlp and mpv |
+
+Channel numbers follow the order on your Pi (`tv list` shows them), so yours may differ if you add channels.
 
 <table>
 <tr><td><img src="docs/img/weather.png"></td><td><img src="docs/img/threatmap.png"></td></tr>
@@ -92,13 +91,16 @@ channels = ["@veritasium", "@SmarterEveryDay"]
 
 ## The look
 
-Each screen's name runs up the left edge in enormous condensed type, the **spine**, so
-you know what you're looking at from across the room. Everything else stays quiet: deep
-petrol background, bone-white numbers, one accent color per screen, no boxes around
-everything, no drop shadows, no emoji, and no text allowed to spill out of its space
-(there's a test for that). Type is Big Shoulders Display and IBM Plex, bundled.
+Every channel is a different kind of station, the way flipping through cable used to feel:
+the forecast is on a beveled blue panel with a yellow crawl, the markets have a ticker, the
+threat level is a lit lamp on an amber CRT, aircraft get paper flight strips, the Pi's own
+health is a BIOS screen. Each has its own palette and typeface (Jost, Bungee, Saira Stencil,
+B612 Mono, Oxanium, Anton, VT323, Share Tech Mono, Barlow Condensed, Big Shoulders and IBM
+Plex, all bundled). What stays the same everywhere is the TV around them: the snow between
+channels, the green channel number, and `legitbiz.research` in the corner like a network bug.
 
-`legitbiz.research` sits in the corner of every channel like a network bug.
+And everywhere, no text is allowed to spill out of its space or draw a missing-glyph box;
+the tests render every channel in every data state and fail if it does.
 
 ---
 
@@ -119,7 +121,7 @@ the size of a stick of gum keeps up with all of it.
 
 ```bash
 git clone https://github.com/NPCmillionaire/pizero-tv && cd pizero-tv
-./deploy.sh pizero              # any ssh host name; installs to ~/pizero-tv and autostarts
+./deploy.sh pizero              # any ssh host name; installs to ~/pizero-tv as a systemd user service
 ```
 
 Then tell it where it lives. On the Pi, edit `~/.config/pizero-tv/config.toml` (the
@@ -134,6 +136,30 @@ lon = -122.4194
 
 [lan]                   # the LAN sonar's ping sweep
 subnet = "192.168.1.0/24"
+```
+
+The display host runs as a systemd user service (`pizero-tv.service`), not from your
+login or an ssh session, so a dropped ssh connection can't take the TV down, and if the
+host ever crashes it's back in three seconds. `systemctl --user status pizero-tv` and
+`tv logs` tell you what it's doing.
+
+### Other machines on the SYSTEM channel
+
+SYSTEM shows the Pi, and any other Mac or Linux box running the stats agent: a small,
+standard-library-only script that answers read-only stats on port 8765, to private network
+addresses only.
+
+```bash
+./tools/install_agent.sh          # this Mac (launchd) or this Linux box (systemd)
+./tools/install_agent.sh arch     # a Linux machine over ssh
+```
+
+Then list them in the Pi's `config.toml`:
+
+```toml
+[[system.hosts]]
+name = "darwin"
+url = "http://darwin.local:8765"
 ```
 
 ## Drive it
@@ -220,9 +246,10 @@ What you get for free:
 - **`self.source()`** polls on its own thread, caches the last good payload to disk,
   and never lets an exception reach your drawing code. Its `.status` is `waiting`,
   `live`, `stale` or `offline`, and the footer shows the worst one for you.
-- **The frame.** The spine, the footer, the station bug, the channel static and the
-  on-screen display are drawn around you. Your content goes between x 190 and 1250 on a
-  1280×720 canvas.
+- **The frame.** By default you get the house look: the spine down the left, content
+  between x 190 and 1250 on a 1280×720 canvas. Override `draw_frame(surf)` to build your
+  own station instead; `tvkit.fx` has gradients, ticker crawls, scanlines and neon glow.
+  The channel static, the on-screen display and the station bug are always drawn for you.
 - **`text.draw(..., max_w=...)`** truncates with an ellipsis instead of overflowing.
   `text.wrap()` breaks lines.
 - **`draw_live(surf, t)`** is for anything that moves. Return `True` while it's animating
@@ -248,7 +275,7 @@ off the screen. And keep the one rule: if the data isn't there, say so.
 ```bash
 uv venv --python 3.13 .venv
 uv pip install pytest pygame==2.6.1 requests numpy psutil fonttools yt-dlp
-.venv/bin/python -m pytest -q                         # 393 tests
+.venv/bin/python -m pytest -q                         # 421 tests
 TV_WINDOWED=1 .venv/bin/python -m tvkit --only crypto  # one screen in a window
 ```
 
@@ -256,7 +283,7 @@ TV_WINDOWED=1 .venv/bin/python -m tvkit --only crypto  # one screen in a window
 bin/tv           the CLI (local socket, or ssh with -H)
 tvkit/           host, channels and static, Module API, Source, theme, text, charts, world map, fonts
 modules/         one folder per screen
-tools/           rebuild fonts, world map, SF basemap, MAC vendor table, test fixtures
+tools/           rebuild fonts, world map, SF basemap, MAC vendor table, test fixtures; snapshot.py renders a channel to PNG; install_agent.sh
 deploy.sh        install or update a Pi
 ```
 
