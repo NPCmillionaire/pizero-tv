@@ -14,9 +14,10 @@ _rng = np.random.default_rng()
 
 def static(surf, elapsed):
     """Analog snow with a rolling bright bar — the gap between channels."""
-    noise = _rng.integers(0, 256, (160, 90), dtype=np.uint8)
-    bar = int((elapsed * 900) % 90)
-    noise[:, max(0, bar - 6):bar] = np.minimum(255, noise[:, max(0, bar - 6):bar].astype(np.int16) + 90).astype(np.uint8)
+    noise = _rng.integers(0, 256, (426, 240), dtype=np.uint8)
+    bar = int((elapsed * 1600) % 240)
+    lo = max(0, bar - 14)
+    noise[:, lo:bar] = np.minimum(255, noise[:, lo:bar].astype(np.int16) + 80).astype(np.uint8)
     rgb = np.repeat(noise[:, :, None], 3, axis=2)
     rgb[:, :, 2] = np.minimum(255, rgb[:, :, 2].astype(np.int16) + 18).astype(np.uint8)   # cold CRT tint
     surf.blit(pygame.transform.scale(pygame.surfarray.make_surface(rgb), surf.get_size()), (0, 0))
