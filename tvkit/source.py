@@ -54,9 +54,15 @@ class Source:
             payload = self.fetch()
             value = self.parse(payload)
         except Exception as e:
-            print(f"[{self.name}] {type(e).__name__}: {e}", file=sys.stderr)
+            msg = f"{type(e).__name__}: {e}"
+            if not getattr(self, "_failing", False):          # log an outage once, not every poll
+                print(f"[{self.name}] {msg}", file=sys.stderr)
+            self._failing = True
             self._last_ok = False
             return False
+        if getattr(self, "_failing", False):
+            print(f"[{self.name}] back", file=sys.stderr)
+            self._failing = False
         self.value, self._got_at, self._last_ok, self._from_cache = value, self.wall(), True, False
         self.version += 1
         self._save_cache(payload)

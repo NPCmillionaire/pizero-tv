@@ -101,3 +101,19 @@ def test_module_stop_does_not_wait_for_slow_fetch():
     t0 = _t.time()
     m.stop()
     assert _t.time() - t0 < 1.0
+
+
+def test_repeated_failures_are_logged_once_until_recovery(capsys):
+    calls = {"n": 0}
+
+    def fetch():
+        calls["n"] += 1
+        if calls["n"] <= 3 or calls["n"] == 5:
+            raise ConnectionError("refused")
+        return {"ok": 1}
+    s, _ = make(fetch)
+    for _ in range(5):
+        s.poll_once()
+    err = capsys.readouterr().err
+    assert err.count("refused") == 2                  # once for the first outage, once for the second
+    assert "back" in err
