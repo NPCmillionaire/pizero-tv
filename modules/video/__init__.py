@@ -19,29 +19,25 @@ def ytdlp_path():
     return local if os.access(local, os.X_OK) else shutil.which("yt-dlp")
 
 
-def fetch_listing(urls, stop=None, per=40):
+def fetch_listing(urls, stop=None, per=25):
     """List uploads for each URL with yt-dlp. Stops (and kills yt-dlp) as soon as `stop` is set."""
     ytdl = ytdlp_path()
     if not ytdl:
         raise RuntimeError("yt-dlp is not installed")
-    entries = []
-    for u in urls:
-        if stop is not None and stop.is_set():
-            raise RuntimeError("stopped")
-        p = subprocess.Popen([ytdl, "--flat-playlist", "-J", "--playlist-end", str(per), u],
-                             stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True)
-        deadline = time.monotonic() + 120
-        while True:
-            try:
-                out, _ = p.communicate(timeout=1)
-                break
-            except subprocess.TimeoutExpired:
-                if (stop is not None and stop.is_set()) or time.monotonic() > deadline:
-                    p.kill()
-                    p.communicate()
-                    raise RuntimeError("listing interrupted")
-        if p.returncode == 0:
-            entries += json.loads(out).get("entries") or []
+    # one yt-dlp run for every URL: on a Pi Zero, yt-dlp's own startup is most of the cost
+    p = subprocess.Popen([ytdl, "--flat-playlist", "-J", "--ignore-errors", "--playlist-end", str(per), *urls],
+                         stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True)
+    deadline = time.monotonic() + 300
+    while True:
+        try:
+            out, _ = p.communicate(timeout=1)
+            break
+        except subprocess.TimeoutExpired:
+            if (stop is not None and stop.is_set()) or time.monotonic() > deadline:
+                p.kill()
+                p.communicate()
+                raise RuntimeError("listing interrupted")
+    entries = data.parse_json_lines(out)
     return {"entries": [{k: e.get(k) for k in ("id", "title", "duration", "url")} for e in entries if e]}
 
 
@@ -148,9 +144,12 @@ class VideoChannel(Module):
                 text.draw(surf, line, (X0, 390 + i * 34), "sans", 24, theme.LICHEN)
             return
         if self.listing.value is None:
-            msg = "YouTube isn't answering." if self.listing.status == "offline" else "Finding something to watch."
+            msg = ("YouTube isn't answering." if self.listing.status == "offline" else
+                   "Listing videos with yt-dlp. On a Pi Zero the first visit takes a minute or two; after that "
+                   "the list is cached for six hours.")
             text.draw(surf, "Tuning in", (X0 - 4, 250), "display", 110, self.key)
-            text.draw(surf, msg, (X0, 390), "sans", 24, theme.LICHEN)
+            for i, line in enumerate(text.wrap(msg, "sans", 24, 1060)):
+                text.draw(surf, line, (X0, 390 + i * 34), "sans", 24, theme.LICHEN)
             return
         e = self.now_playing
         text.draw(surf, "Now playing" if e else "Tuning in", (X0, 230), "sans", 24, theme.LICHEN)

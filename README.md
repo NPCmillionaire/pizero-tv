@@ -155,35 +155,93 @@ With a keyboard plugged in, **Space** advances whatever a screen rotates through
 
 ---
 
-## Make a screen
+## Make your own channel
 
-A screen is a folder in `modules/` with an `__init__.py` that exports `MODULE`. The host
-finds it on its own.
+There are two ways, depending on whether you want to write code.
+
+### A YouTube channel, no code
+
+Add a `[[video]]` block to `~/.config/pizero-tv/config.toml` on the Pi and restart the
+host (`pkill -f "python3 -m tvkit"`; it comes straight back). The new channel gets the
+next free number and shows up in the guide.
+
+```toml
+[[video]]
+name = "numberphile"                 # what you type: tv numberphile
+title = "NUMBERPHILE"                # the spine and the on-screen display
+url = "https://www.youtube.com/@numberphile/videos"
+blurb = "Videos about numbers"       # optional, shown in the guide
+
+[shorts]                             # replaces the SHORTS channel's sources
+channels = ["@veritasium", "@SmarterEveryDay", "@minutephysics"]
+```
+
+Any YouTube channel's `/videos`, `/shorts` or a playlist URL works.
+
+### A data channel, in Python
+
+A channel is a folder in `modules/` whose `__init__.py` exports `MODULE`. The host finds it
+on its own. Here's a complete one that shows the current Bitcoin block height:
 
 ```python
+# modules/blocks/__init__.py
+import requests
+
 from tvkit import text, theme
 from tvkit.module import Module
 
 
-class Tides(Module):
-    name, title, key = "tides", "TIDES", theme.SEAGLASS
-    blurb = "High and low water"
+def fetch():                                   # runs on a background thread
+    return requests.get("https://mempool.space/api/blocks/tip/height", timeout=15).json()
+
+
+class Blocks(Module):
+    name, title, key = "blocks", "BLOCKS", theme.SODIUM   # tv blocks, spine text, accent color
+    blurb = "The newest Bitcoin block"                     # one line for the guide
+    order = 35                                             # channel number comes from this
 
     def start(self, ctx):
         super().start(ctx)
-        self.src = self.source("tides", fetch_tides, interval=900, parse=parse_tides)
+        self.height = self.source("height", fetch, interval=60, parse=int)
 
-    def draw_static(self, surf):           # redrawn only when data changes
-        if self.src.value:
-            text.draw(surf, self.src.value.next_high, (190, 60), "display", 160)
+    def draw_static(self, surf):                           # redrawn only when the data changes
+        if self.height.value is None:
+            text.draw(surf, "Waiting for mempool.space", (190, 300), "sans", 24, theme.LICHEN)
+            return
+        text.draw(surf, "Latest block", (190, 40), "sans-500", 22, theme.BONE)
+        text.draw(surf, f"{self.height.value:,}", (186, 70), "display", 220, theme.BONE)
 
-MODULE = Tides
+
+MODULE = Blocks
 ```
 
-`self.source()` polls on its own thread, caches the last good payload to disk, and
-reports `waiting`, `live`, `stale` or `offline`, which the footer shows. `draw_live()`
-is for anything that moves. The shared render test draws every screen in every one of
-those states and fails if any text leaves the screen.
+What you get for free:
+
+- **`self.source()`** polls on its own thread, caches the last good payload to disk,
+  and never lets an exception reach your drawing code. Its `.status` is `waiting`,
+  `live`, `stale` or `offline`, and the footer shows the worst one for you.
+- **The frame.** The spine, the footer, the station bug, the channel static and the
+  on-screen display are drawn around you. Your content goes between x 190 and 1250 on a
+  1280×720 canvas.
+- **`text.draw(..., max_w=...)`** truncates with an ellipsis instead of overflowing.
+  `text.wrap()` breaks lines.
+- **`draw_live(surf, t)`** is for anything that moves. Return `True` while it's animating
+  and the host runs at 24 FPS (or your `fps`), otherwise 8.
+- **`on_key(event)`** gets every key except the channel keys.
+- **`tvkit.charts`** (sparklines, candles) and **`tvkit.world`** (a world map with a
+  projection) are there if you need them.
+
+Try it in a window on your laptop, then ship it:
+
+```bash
+TV_WINDOWED=1 .venv/bin/python -m tvkit --only blocks
+./deploy.sh pizero && ssh pizero tv blocks
+```
+
+Before you send a pull request, save a real response as a fixture
+(`tools/capture_fixture.py URL tests/modules/blocks/fixtures/height.json`). The shared
+render test will then draw your channel in every data state and fail if any text runs
+off the screen. And keep the one rule: if the data isn't there, say so.
 
 ## Develop
 

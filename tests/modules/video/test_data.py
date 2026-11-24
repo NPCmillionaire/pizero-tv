@@ -171,3 +171,9 @@ def test_orphan_pattern_matches_our_mpv():
     args = data.mpv_args(e, 14, "X", ytdl="y", input_conf="/home/u/.cache/pizero-tv/computerphile/mpv-input.conf")
     import re
     assert re.search(video.ORPHAN_PATTERN, " ".join(args))
+
+
+def test_parse_multi_json_lines():
+    out = json.dumps(CP) + "\n" + json.dumps(SH) + "\n\n"
+    assert len(data.parse_json_lines(out)) == 50
+    assert data.parse_json_lines("not json\n" + json.dumps(SH)) == SH["entries"]

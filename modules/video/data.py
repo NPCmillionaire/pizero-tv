@@ -53,3 +53,18 @@ def input_conf(tv):
     for d in range(10):
         lines += [f'{d} run "{tv}" digit {d}', f'KP{d} run "{tv}" digit {d}']
     return "\n".join(lines) + "\n"
+
+
+def parse_json_lines(out):
+    """yt-dlp -J with several URLs prints one JSON document per line; collect every entry."""
+    import json
+    entries = []
+    for line in out.splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            entries += json.loads(line).get("entries") or []
+        except ValueError:
+            continue
+    return entries
