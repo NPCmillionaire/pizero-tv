@@ -52,3 +52,23 @@ def test_due_pops_once():
     assert [c.cad for c in r.due(1.0)] == ["a"]
     assert r.due(1.0) == []
     assert [c.cad for c in r.due(60.0)] == ["b"]
+
+
+def test_window_follows_batch_span():
+    r = Replayer(window=60.0, max_window=720.0)
+    r.add([call("a", 0), call("b", 600)], now=0.0, initial=False)
+    assert [c.cad for c in r.due(530.0)] == ["a"]
+    assert [c.cad for c in r.due(541.0)] == ["b"]      # 0.9 × 600 s
+
+
+def test_window_capped():
+    r = Replayer(window=60.0, max_window=720.0)
+    r.add([call("a", 0), call("b", 7200)], now=0.0, initial=False)
+    assert [c.cad for c in r.due(0.9 * 720 + 1)] == ["a", "b"]
+
+
+def test_window_floor_is_poll_window():
+    r = Replayer(window=60.0, max_window=720.0)
+    r.add([call("a", 0), call("b", 5)], now=0.0, initial=False)
+    assert [c.cad for c in r.due(1.0)] == ["a"]
+    assert [c.cad for c in r.due(54.5)] == ["b"]

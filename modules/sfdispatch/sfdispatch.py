@@ -35,32 +35,48 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 class Fetcher(threading.Thread):
     """Polls the feed in the background; hands batches + stats to the UI thread."""
 
-    def __init__(self):
+    def __init__(self, feed=None, clock=time.monotonic):
         super().__init__(daemon=True)
-        self.feed = Feed()
+        self.feed = feed or Feed()
+        self.clock = clock
         self.lock = threading.Lock()
         self.batches = []      # list of (calls, initial)
         self.stats = None
+        self.calls = []        # snapshot for the glow layer
         self.status, self.age = "CONNECTING", None
-        self.polls = 0
+        self.last_report = clock()
+        self.delivered = False
+
+    def step(self):
+        try:
+            new = self.feed.poll()
+            calls = self.feed.calls
+            st = stats(calls) if calls else None
+            status, age = self.feed.status, self.feed.data_age
+        except Exception as e:  # never let the thread die: say so on screen instead
+            print(f"fetch error: {e!r}", file=sys.stderr, flush=True)
+            new, calls, st, status, age = [], None, None, "OFFLINE", None
+        with self.lock:
+            if new:
+                self.batches.append((new, not self.delivered))
+                self.delivered = True
+            if calls is not None:
+                self.stats, self.calls = st, calls
+            self.status, self.age = status, age
+            self.last_report = self.clock()
 
     def run(self):
         while True:
-            new = self.feed.poll()
-            st = stats(self.feed.calls) if self.feed.calls else None
-            with self.lock:
-                if new:
-                    self.batches.append((new, self.polls == 0 or not self.stats))
-                if st:
-                    self.stats = st
-                self.status, self.age = self.feed.status, self.feed.data_age
-            self.polls += 1
+            self.step()
             time.sleep(POLL_S)
 
     def take(self):
         with self.lock:
             b, self.batches = self.batches, []
-            return b, self.stats, self.status, self.age
+            status = self.status
+            if self.clock() - self.last_report > 3 * POLL_S:
+                status = "OFFLINE"   # fetch thread stuck (e.g. DNS hang)
+            return b, self.stats, status, self.age
 
 
 def load_basemap():
@@ -303,7 +319,7 @@ def main():
 
     fetcher = Fetcher()
     fetcher.start()
-    replayer = Replayer(window=POLL_S)
+    replayer = Replayer(window=POLL_S, max_window=720)
     shown = []          # revealed calls, oldest first
     active = []         # (call, reveal_t) for ripples
     st, status, age = None, "CONNECTING", None
@@ -332,7 +348,7 @@ def main():
             replayer.add(b, t, initial=initial)
         if new_st is not None and new_st is not st:
             st = new_st
-            glow = render_hood_glow(hood_polys, fetcher.feed.calls[:])
+            glow = render_hood_glow(hood_polys, fetcher.calls)
             map_dirty = True
         if (new_status, new_age) != (status, age):
             status, age = new_status, new_age

@@ -179,3 +179,38 @@ def test_build_url_selects_only_needed_columns(monkeypatch):
                     "call_type_original_desc", "priority_final", "priority_original",
                     "intersection_name", "intersection_point", "analysis_neighborhood",
                     "data_loaded_at"}
+
+
+def test_full_refresh_recovers_late_dispatched_call():
+    """A call received 2h before the newest one only appears later (late dispatch)."""
+    newest = rec("n", NOW - timedelta(minutes=10))
+    late = rec("late", NOW - timedelta(hours=2, minutes=10))
+    urls = []
+    pages = iter([[newest]] + [[]] * (feed.FULL_EVERY - 1) + [[newest, late]])
+
+    def fetch(url):
+        urls.append(url)
+        return next(pages)
+    f = Feed(fetch=fetch, clock=lambda: NOW)
+    for _ in range(feed.FULL_EVERY):
+        f.poll()
+    got = f.poll()
+    assert [c.cad for c in got] == ["late"]
+    assert "2026-11-22T18%3A55%3A00" in urls[-1]   # full 24h window
+
+
+def test_updated_row_replaces_stored_call():
+    first = dict(SAMPLE)
+    del first["dispatch_datetime"]
+    f = make_feed([[first], [SAMPLE]])
+    f.poll()
+    assert f.poll() == []                       # not re-announced
+    assert len(f.calls) == 1 and f.calls[0].dispatched is not None
+
+
+def test_malformed_rows_are_skipped():
+    bad = [42, None, dict(SAMPLE, cad_number="x", priority_final=7, call_type_final_desc=9), SAMPLE]
+    f = make_feed([bad])
+    got = f.poll()
+    assert [c.cad for c in got] == ["263272725"]
+    assert f.status == "LIVE"

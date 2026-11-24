@@ -12,6 +12,7 @@ STALE_AFTER = timedelta(minutes=30)
 COLUMNS = ("cad_number", "received_datetime", "dispatch_datetime", "call_type_final_desc",
            "call_type_original_desc", "priority_final", "priority_original", "intersection_name",
            "intersection_point", "analysis_neighborhood", "data_loaded_at")
+FULL_EVERY = 10   # polls between full 24 h re-reads (~10 min at 60 s polls)
 OVERLAP = timedelta(minutes=30)  # re-read recent rows; dedupe absorbs repeats
 
 
@@ -105,38 +106,53 @@ def requests_get_json(url):
 
 
 class Feed:
+    """Holds the last 24 h of calls keyed by CAD number.
+
+    Most polls are incremental (recent rows only). Every FULL_EVERY polls the whole
+    24 h window is re-read, which picks up calls that were dispatched late (the
+    dataset only lists a call once dispatched) and rows whose fields changed.
+    """
+
     def __init__(self, fetch=requests_get_json, clock=now_la):
         self.fetch, self.clock = fetch, clock
-        self.calls = []
-        self._seen = set()
+        self._by_cad = {}
         self._loaded = None
+        self._n = 0
         self.status = "OFFLINE"
         self.data_age = None
 
+    @property
+    def calls(self):
+        return sorted(self._by_cad.values(), key=lambda c: c.received)
+
     def poll(self):
         now = self.clock()
-        since = max((c.received - OVERLAP for c in self.calls), default=now - WINDOW)
+        cutoff = now - WINDOW
+        full = self._n % FULL_EVERY == 0 or not self._by_cad
+        since = cutoff if full else max(c.received for c in self._by_cad.values()) - OVERLAP
         try:
             rows = self.fetch(build_url(since))
         except Exception:
             self.status = "OFFLINE"
             return []
+        self._n += 1
         new = []
         for raw in rows if isinstance(rows, list) else []:
-            loaded = _ts(raw.get("data_loaded_at"))
+            try:
+                loaded = _ts(raw.get("data_loaded_at"))
+                c = parse_call(raw)
+            except Exception:   # malformed row: skip it, keep the rest
+                continue
             if loaded and (self._loaded is None or loaded > self._loaded):
                 self._loaded = loaded
-            c = parse_call(raw)
-            if c and c.cad not in self._seen and c.received >= now - WINDOW:
-                self._seen.add(c.cad)
-                new.append(c)
-        self.calls.extend(new)
-        cutoff = now - WINDOW
-        self.calls = [c for c in self.calls if c.received >= cutoff]
-        self._seen = {c.cad for c in self.calls}
+            if c and c.received >= cutoff:
+                if c.cad not in self._by_cad:
+                    new.append(c)
+                self._by_cad[c.cad] = c
+        self._by_cad = {k: c for k, c in self._by_cad.items() if c.received >= cutoff}
         self.data_age = now - self._loaded if self._loaded else None
         self.status = "LIVE" if self.data_age is not None and self.data_age <= STALE_AFTER else "STALE"
-        return new
+        return sorted(new, key=lambda c: c.received)
 
 
 def stats(calls):

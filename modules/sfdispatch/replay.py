@@ -16,14 +16,19 @@ def schedule(batch, start, window):
 
 
 class Replayer:
-    def __init__(self, window=60.0):
-        self.window = window
+    def __init__(self, window=60.0, max_window=720.0):
+        """window: minimum spread (the poll interval); max_window: cap, ~ the feed's refresh."""
+        self.window, self.max_window = window, max_window
         self._q = []  # sorted list of (time, seq, call)
         self._seq = 0
 
     def add(self, batch, now, initial=False):
-        items = [(now, c) for c in sorted(batch, key=lambda c: c.received)] if initial \
-            else schedule(batch, now, self.window)
+        if initial:
+            items = [(now, c) for c in sorted(batch, key=lambda c: c.received)]
+        else:
+            rs = [c.received for c in batch]
+            span = (max(rs) - min(rs)).total_seconds() if rs else 0.0
+            items = schedule(batch, now, min(self.max_window, max(self.window, span)))
         for t, c in items:
             bisect.insort(self._q, (t, self._seq, c))
             self._seq += 1
