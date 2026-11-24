@@ -80,7 +80,7 @@ def test_show_runs_static_then_module():
     h, c = make(Counting)
     h.show("count")
     assert h.phase == "static" and Counting.starts == 1     # data starts loading under the static
-    run(h, c, 0.3)
+    run(h, c, 0.5)
     assert h.phase == "static"
     run(h, c, 0.2)
     assert h.phase == "module"
@@ -89,7 +89,7 @@ def test_show_runs_static_then_module():
 def test_module_shown_before_ready():
     h, c = make(Slow)
     h.show("slow")
-    run(h, c, 0.6)
+    run(h, c, 0.8)
     assert h.phase == "module"
 
 
@@ -318,3 +318,12 @@ def test_static_shows_station_tag():
     r = scenes.static(s, 0.2)
     assert scenes.STATION_TAG == "legitbiz{research}" and r is not None and r.width > 300
     assert text.OVERFLOWS == []
+
+
+def test_static_frames_differ_over_time():
+    import pygame
+    from tvkit import scenes
+    a, b = pygame.Surface((1280, 720)), pygame.Surface((1280, 720))
+    scenes.static(a, 0.00)
+    scenes.static(b, 0.05)
+    assert pygame.image.tobytes(a, "RGB")[:200000] != pygame.image.tobytes(b, "RGB")[:200000]

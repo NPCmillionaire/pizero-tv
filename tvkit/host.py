@@ -6,7 +6,7 @@ import pygame
 from . import chrome, scenes, text
 from .module import Ctx
 
-STATIC_S, CRASH_S, OSD_S, OSD_FADE, DIGIT_S = 0.4, 10.0, 3.0, 0.5, 1.2
+STATIC_S, CRASH_S, OSD_S, OSD_FADE, DIGIT_S = 0.6, 10.0, 3.0, 0.5, 1.2
 FPS_ACTIVE, FPS_IDLE = 24, 8
 
 

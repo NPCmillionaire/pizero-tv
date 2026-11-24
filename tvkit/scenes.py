@@ -13,15 +13,39 @@ STATION_TAG = "legitbiz{research}"
 _rng = np.random.default_rng()
 
 
+_FRAMES = []
+NOISE_W, NOISE_H, NOISE_FRAMES = 426, 240, 10
+
+
+def _noise_frames():
+    """A few pre-made low-res snow frames; flipping through them is cheap enough for a Pi Zero."""
+    if not _FRAMES:
+        for _ in range(NOISE_FRAMES):
+            n = _rng.integers(0, 256, (NOISE_W, NOISE_H), dtype=np.uint8)
+            rgb = np.repeat(n[:, :, None], 3, axis=2)
+            rgb[:, :, 2] = np.minimum(255, rgb[:, :, 2].astype(np.int16) + 18).astype(np.uint8)   # cold CRT tint
+            _FRAMES.append(pygame.surfarray.make_surface(rgb))
+    return _FRAMES
+
+
 def static(surf, elapsed):
-    """Analog snow with a rolling bright bar — the gap between channels."""
-    noise = _rng.integers(0, 256, (426, 240), dtype=np.uint8)
-    bar = int((elapsed * 1600) % 240)
-    lo = max(0, bar - 14)
-    noise[:, lo:bar] = np.minimum(255, noise[:, lo:bar].astype(np.int16) + 80).astype(np.uint8)
-    rgb = np.repeat(noise[:, :, None], 3, axis=2)
-    rgb[:, :, 2] = np.minimum(255, rgb[:, :, 2].astype(np.int16) + 18).astype(np.uint8)   # cold CRT tint
-    surf.blit(pygame.transform.scale(pygame.surfarray.make_surface(rgb), surf.get_size()), (0, 0))
+    """Analog snow that actually moves: a new frame each draw, rolled vertically, with a sync bar."""
+    frames = _noise_frames()
+    src = frames[int(_rng.integers(0, len(frames)))]
+    w, h = surf.get_size()
+    big = pygame.transform.scale(src, (w, h))
+    roll = int(_rng.integers(0, h))                       # vertical hold slipping
+    surf.blit(big, (0, roll - h))
+    surf.blit(big, (0, roll))
+    bar_y = int((elapsed * 1400) % h)                     # the bright rolling bar
+    band = pygame.Surface((w, 46), pygame.SRCALPHA)
+    band.fill((255, 255, 255, 70))
+    surf.blit(band, (0, bar_y - 23))
+    for _ in range(3):                                    # a few torn scanlines
+        y = int(_rng.integers(0, h - 2))
+        dx = int(_rng.integers(-40, 40))
+        line = surf.subsurface((0, y, w, 2)).copy()
+        surf.blit(line, (dx, y))
     # station ident through the snow, with a little horizontal sync jitter
     img = text.render(STATION_TAG, "display", 96, theme.BONE)
     jitter = int(_rng.integers(-6, 7))
