@@ -28,6 +28,7 @@ fi
 ln -sfn ~/pizero-tv/bin/tv ~/.local/bin/tv
 command -v mpv >/dev/null || echo "note: video channels need mpv (sudo apt install -y mpv)"
 [ -x ~/.local/bin/yt-dlp ] || command -v yt-dlp >/dev/null || echo "note: video channels need yt-dlp in ~/.local/bin"
+python3 -c "import pyte" 2>/dev/null || echo "note: TERMINAL needs python3-pyte (sudo apt install -y python3-pyte)"
 [ -f ~/.config/pizero-tv/config.toml ] || cp ~/pizero-tv/config.example.toml ~/.config/pizero-tv/config.toml
 [ -x ~/tv/tv ] && ~/tv/tv stop >/dev/null 2>&1
 # the old desktop autostart entry is replaced by the service (kept in the archive, not deleted)
@@ -48,4 +49,4 @@ echo "install finished $(date)"
 EOS
 setsid nohup bash /tmp/pizero-tv-install.sh > /tmp/pizero-tv-install.log 2>&1 < /dev/null &'
 echo "Deployed to $HOST. Install log on the Pi: /tmp/pizero-tv-install.log"
-ssh -o ConnectTimeout=10 "$HOST" 'command -v mpv >/dev/null || echo "Video channels need mpv: sudo apt install -y mpv"; [ -x ~/.local/bin/yt-dlp ] || command -v yt-dlp >/dev/null || echo "Video channels need a current yt-dlp in ~/.local/bin (see README)"' || true
+ssh -o ConnectTimeout=10 "$HOST" 'command -v mpv >/dev/null || echo "Video channels need mpv: sudo apt install -y mpv"; [ -x ~/.local/bin/yt-dlp ] || command -v yt-dlp >/dev/null || echo "Video channels need a current yt-dlp in ~/.local/bin (see README)"; python3 -c "import pyte" 2>/dev/null || echo "TERMINAL needs python3-pyte: sudo apt install -y python3-pyte"' || true
