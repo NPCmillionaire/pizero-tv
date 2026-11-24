@@ -43,7 +43,7 @@ class Matrix(Module):
     name, title, key = "matrix", "MATRIX", (0, 255, 120)
     blurb = "Digital rain, in real katakana"
     order = 110
-    fps = 20
+    fps = 10
 
     def start(self, ctx):
         super().start(ctx)

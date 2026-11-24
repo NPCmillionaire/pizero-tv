@@ -41,7 +41,7 @@ class Retro(Module):
     blurb = "Synthwave road, Game of Life and a nixie clock"
     aliases = ("outrun", "synthwave", "arcade")
     order = 120
-    fps = 20
+    fps = 10
 
     def __init__(self):
         super().__init__()

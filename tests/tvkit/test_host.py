@@ -287,3 +287,15 @@ def test_digit_command_feeds_two_digit_entry():
     h.show("m00")
     assert h.handle("digit 1") == "ok" and h.handle("digit 1") == "ok"
     assert h.cls.name == "m11"
+
+
+def test_switch_clears_render_cache():
+    from tvkit import text
+    a, b = mod("aa"), mod("bbb")
+    h, c = make(a, b)
+    h.show("aa")
+    for i in range(50):
+        text.render(f"hero {i}", "display", 200)
+    assert text._render.cache_info().currsize >= 50
+    h.show("bbb")
+    assert text._render.cache_info().currsize == 0

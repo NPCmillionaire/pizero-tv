@@ -3,7 +3,7 @@ import json, os, sys, time, traceback
 
 import pygame
 
-from . import chrome, scenes
+from . import chrome, scenes, text
 from .module import Ctx
 
 STATIC_S, CRASH_S, OSD_S, OSD_FADE, DIGIT_S = 0.4, 10.0, 3.0, 0.5, 1.2
@@ -33,6 +33,7 @@ class Host:
         if cls is None:
             raise KeyError(name)
         self._stop_current()
+        text.clear_cache()
         self.cls, self.mode = cls, mode
         self.phase, self.t_phase = "static", self.clock()
         self.osd_t = self.t_phase

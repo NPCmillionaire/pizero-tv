@@ -80,7 +80,7 @@ class Trippy(Module):
     name, title, key = "trippy", "TRIPPY", (190, 120, 255)
     blurb = "Generative color fields"
     order = 130
-    fps = 15
+    fps = 6
 
     def start(self, ctx):
         super().start(ctx)

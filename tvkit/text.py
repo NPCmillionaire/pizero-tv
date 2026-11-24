@@ -40,9 +40,14 @@ def fit(f, s, max_w):
     return (s[:lo].rstrip() + "…") if lo else ""
 
 
-@lru_cache(maxsize=2048)
+@lru_cache(maxsize=256)
 def _render(role, size, s, color):
     return font(role, size).render(s, True, color)
+
+
+def clear_cache():
+    """Drop cached text surfaces (big hero numbers add up); the host calls this on every switch."""
+    _render.cache_clear()
 
 
 def render(s, role="sans", size=20, color=theme.BONE, max_w=None):
