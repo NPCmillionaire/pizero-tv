@@ -36,6 +36,8 @@ def to_command(args, reg):
         return cmd
     if cmd.isdigit():
         return f"ch {int(cmd)}"
+    if cmd == "digit" and rest and rest[0].isdigit():
+        return f"digit {rest[0]}"
     if cmd == "ch" and rest and rest[0].isdigit():
         return f"ch {int(rest[0])}"
     if cmd == "cycle":

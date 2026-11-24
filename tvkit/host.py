@@ -138,6 +138,8 @@ class Host:
                 self.up()
             elif cmd == "down":
                 self.down()
+            elif cmd == "digit" and args and args[0].isdigit() and len(args[0]) == 1:
+                self.digit(int(args[0]))
             elif cmd == "ch" and args and args[0].isdigit():
                 try:
                     self.channel(int(args[0]))

@@ -33,16 +33,17 @@ class Guide(Module):
     def draw_static(self, surf):
         text.draw(surf, "What's on", (X0 - 4, 22), "display", 96, theme.BONE)
         chans = [c for c in self.reg.channels() if c.name != self.name]
-        per_col = (len(chans) + 1) // 2
-        colw = (X1 - X0) // 2
+        cols = max(2, -(-len(chans) // 8))           # eight rows per column; add columns as channels grow
+        per_col = -(-len(chans) // cols)
+        colw = (X1 - X0) // cols
         for i, c in enumerate(chans):
             col, row = divmod(i, per_col)
-            x, y = X0 + col * colw, 150 + row * 62
+            x, y = X0 + col * colw, 140 + row * 56
             n = self.reg.number(c.name)
             text.draw(surf, f"{n:02d}", (x, y), "display-600", 40, c.key if c.key else theme.BONE)
             text.draw(surf, c.title, (x + 64, y + 2), "display-600", 28, theme.BONE, max_w=colw - 84)
             text.draw(surf, c.blurb, (x + 64, y + 32), "sans", 16, theme.LICHEN, max_w=colw - 84)
-        y = 150 + per_col * 62 + 10
+        y = 140 + per_col * 56 + 8
         pygame.draw.line(surf, theme.TIDE, (X0, y), (X1, y), 1)
         text.draw(surf, "Change channel: tv up, tv down, or tv and a number. Arrow and number keys work too.",
                   (X0, y + 16), "sans", 18, theme.LICHEN, max_w=X1 - X0)

@@ -1,0 +1,114 @@
+import json, os
+
+import pytest
+
+from modules.video import data
+
+D = os.path.join(os.path.dirname(__file__), "fixtures")
+CP = json.load(open(os.path.join(D, "listing_computerphile.json")))
+SH = json.load(open(os.path.join(D, "listing_shorts.json")))
+
+
+def test_parse_listing():
+    e = data.parse_listing({"entries": CP["entries"] + SH["entries"]})
+    assert len(e) == 50 and e[0].id == "BHOw09O3ZsI" and e[0].title == "Atomic Operations - Computerphile"
+    assert e[0].url == "https://www.youtube.com/watch?v=BHOw09O3ZsI"
+
+
+def test_parse_listing_skips_unavailable():
+    bad = {"entries": [{"id": None, "title": "[Private video]"}, {"id": "x1", "title": "[Deleted video]"}] + CP["entries"][:2]}
+    assert [x.id for x in data.parse_listing(bad)] == [CP["entries"][0]["id"], CP["entries"][1]["id"]]
+
+
+def test_parse_listing_empty_raises():
+    with pytest.raises(ValueError):
+        data.parse_listing({"entries": []})
+
+
+def test_pick_avoids_recent():
+    e = data.parse_listing({"entries": CP["entries"][:12]})
+    recent = [x.id for x in e[:10]]
+    for seed in range(20):
+        assert data.pick(e, recent, seed=seed).id in {e[10].id, e[11].id}
+
+
+def test_pick_when_everything_is_recent():
+    e = data.parse_listing({"entries": CP["entries"][:3]})
+    assert data.pick(e, [x.id for x in e], seed=1).id in {x.id for x in e}
+
+
+def test_strip_channel_suffix():
+    assert data.clean_title("Atomic Operations - Computerphile") == "Atomic Operations"
+    assert data.clean_title("Does adding helium reduce a balloon’s mass?") == "Does adding helium reduce a balloon’s mass?"
+
+
+def test_mpv_args():
+    e = data.parse_listing({"entries": CP["entries"][:1]})[0]
+    a = data.mpv_args(e, 14, "COMPUTERPHILE", ytdl="/home/u/.local/bin/yt-dlp", input_conf="/tmp/in.conf")
+    assert a[0] == "mpv" and "--fs" in a and a[-1] == e.url
+    assert "--ytdl-format=bv*[height<=720][vcodec^=avc1]+ba/b[height<=720]" in a
+    assert "--script-opts=ytdl_hook-ytdl_path=/home/u/.local/bin/yt-dlp" in a
+    assert any(x.startswith("--osd-playing-msg=CH 14  COMPUTERPHILE") for x in a)
+    assert "--input-conf=/tmp/in.conf" in a
+
+
+def test_input_conf_maps_remote_keys():
+    conf = data.input_conf("/home/u/pizero-tv/bin/tv")
+    assert 'UP run "/home/u/pizero-tv/bin/tv" up' in conf and 'q ignore' in conf
+    assert 'KP3 run "/home/u/pizero-tv/bin/tv" digit 3' in conf and '3 run "/home/u/pizero-tv/bin/tv" digit 3' in conf
+
+
+def _ctx(fakes):
+    from tvkit import config
+    from tvkit.module import Ctx
+    return Ctx(config.Config(), None, fakes=fakes)
+
+
+def test_video_without_mpv_shows_message(monkeypatch):
+    import shutil
+    import modules.video as video
+    monkeypatch.setattr(shutil, "which", lambda name: None)
+    m = video.MODULES[0]()
+    m.start(_ctx({"listing": CP}))
+    assert "needs mpv" in m.problem and not m.external
+    m.stop()
+
+
+def test_stop_kills_player(monkeypatch):
+    import os
+    import modules.video as video
+
+    class FakeProc:
+        pid, killed = 4242, []
+
+        def poll(self):
+            return None
+
+        def wait(self, timeout=None):
+            return 0
+
+        def terminate(self):
+            FakeProc.killed.append("term")
+
+        def kill(self):
+            FakeProc.killed.append("kill")
+    monkeypatch.setattr(os, "killpg", lambda pid, sig: FakeProc.killed.append(("killpg", pid, sig)))
+    m = video.MODULES[0]()
+    m.start(_ctx({"listing": CP}))
+    m.proc = FakeProc()
+    assert m.external
+    m.stop()
+    assert ("killpg", 4242, 15) in FakeProc.killed
+
+
+def test_config_adds_channels(tmp_path, monkeypatch):
+    from tvkit import config
+    p = tmp_path / "c.toml"
+    p.write_text('[[video]]\nname = "numberphile"\ntitle = "NUMBERPHILE"\nurl = "https://www.youtube.com/@numberphile/videos"\n')
+    monkeypatch.setattr(config, "DEFAULT_PATH", str(p))
+    import importlib
+    import modules.video as video
+    v = importlib.reload(video)
+    assert [m.name for m in v.MODULES] == ["computerphile", "shorts", "numberphile"]
+    monkeypatch.undo()
+    importlib.reload(video)

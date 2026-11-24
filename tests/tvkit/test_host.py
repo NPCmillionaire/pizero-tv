@@ -279,3 +279,11 @@ def test_module_can_lower_its_active_fps():
     h.show("art")
     run(h, c, 1.5)
     assert h.step() == 15
+
+
+def test_digit_command_feeds_two_digit_entry():
+    mods = [mod(f"m{i:02d}", order=i) for i in range(13)]
+    h, c = make(*mods)
+    h.show("m00")
+    assert h.handle("digit 1") == "ok" and h.handle("digit 1") == "ok"
+    assert h.cls.name == "m11"

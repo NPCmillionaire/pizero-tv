@@ -55,3 +55,7 @@ def test_cli_status_pretty(reg, monkeypatch, capsys):
 def test_cli_up_down_numbers(reg):
     assert cli.to_command(["up"], reg) == "up" and cli.to_command(["down"], reg) == "down"
     assert cli.to_command(["7"], reg) == "ch 7" and cli.to_command(["ch", "12"], reg) == "ch 12"
+
+
+def test_cli_digit_passthrough(reg):
+    assert cli.to_command(["digit", "4"], reg) == "digit 4"
