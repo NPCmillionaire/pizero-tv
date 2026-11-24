@@ -204,3 +204,15 @@ def test_cycle_with_one_module_does_not_restart_it():
     h.cycle(30, None)
     run(h, c, 70)
     assert Counting.starts == 1 and h.phase == "module"
+
+
+def test_module_can_lower_its_active_fps():
+    class Art(Module):
+        name, title, blurb, fps = "art", "ART", "x", 15
+
+        def draw_live(self, surf, t):
+            return True
+    h, c = make(Art)
+    h.show("art")
+    run(h, c, 1.5)
+    assert h.step() == 15

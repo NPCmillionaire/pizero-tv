@@ -143,7 +143,8 @@ class Host:
                 return FPS_ACTIVE
             try:
                 self._draw_module(now)
-                return FPS_ACTIVE if self.current.draw_live(self.screen, now) else FPS_IDLE
+                fps = getattr(self.current, "fps", FPS_ACTIVE)
+                return fps if self.current.draw_live(self.screen, now) else FPS_IDLE
             except Exception:
                 self._crash(traceback.format_exc())
         if self.phase == "crash":

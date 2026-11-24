@@ -22,6 +22,7 @@ class Module:
     key = theme.SODIUM    # spine / accent color
     aliases = ()
     order = 100           # position in the default cycle
+    fps = 24              # frame rate while draw_live reports motion
 
     def __init__(self):
         self.sources = []
