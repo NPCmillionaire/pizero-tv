@@ -9,6 +9,7 @@ from . import text, theme
 
 
 OSD_GREEN = (124, 255, 107)
+STATION_TAG = "legitbiz{research}"
 _rng = np.random.default_rng()
 
 
@@ -21,6 +22,15 @@ def static(surf, elapsed):
     rgb = np.repeat(noise[:, :, None], 3, axis=2)
     rgb[:, :, 2] = np.minimum(255, rgb[:, :, 2].astype(np.int16) + 18).astype(np.uint8)   # cold CRT tint
     surf.blit(pygame.transform.scale(pygame.surfarray.make_surface(rgb), surf.get_size()), (0, 0))
+    # station ident through the snow, with a little horizontal sync jitter
+    img = text.render(STATION_TAG, "display", 96, theme.BONE)
+    jitter = int(_rng.integers(-6, 7))
+    box = pygame.Rect(0, 0, img.get_width() + 60, img.get_height() + 16)
+    box.center = (surf.get_width() // 2 + jitter, surf.get_height() // 2)
+    plate = pygame.Surface(box.size, pygame.SRCALPHA)
+    plate.fill((4, 10, 12, 190))
+    surf.blit(plate, box)
+    return text.draw(surf, STATION_TAG, box.center, "display", 96, theme.BONE, anchor="center")
 
 
 def osd(surf, number, title, alpha=255):

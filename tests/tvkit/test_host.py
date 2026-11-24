@@ -308,3 +308,13 @@ def test_state_not_a_dict_falls_back(tmp_path):
     h, _ = make(a, state_path=str(sp))
     h.resume()
     assert h.mode == "cycle" and h.current.name == "aa"
+
+
+def test_static_shows_station_tag():
+    import pygame
+    from tvkit import scenes, text
+    s = pygame.Surface((1280, 720))
+    text.OVERFLOWS.clear()
+    r = scenes.static(s, 0.2)
+    assert scenes.STATION_TAG == "legitbiz{research}" and r is not None and r.width > 300
+    assert text.OVERFLOWS == []
