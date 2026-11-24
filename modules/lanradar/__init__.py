@@ -9,8 +9,12 @@ from tvkit.module import Module
 
 from . import data
 
-CX, CY, R = 488, 376, 296
-RX0, RX1 = 840, 1250
+CX, CY, R = 400, 380, 290
+RX0, RX1 = 760, 1250
+PING_S = 4                       # one sonar ping every four seconds
+# submarine sonar: cyan on deep water, contacts that light as each ping passes them
+DEEPSEA, WATER, RINGC = (0, 9, 16), (0, 24, 36), (0, 66, 86)
+CYAN, CDIM, NEWC, WHITE = (70, 232, 255), (32, 132, 156), (255, 150, 40), (210, 250, 255)
 SWEEP_EVERY = 300
 RTT = re.compile(r"time=([\d.]+) ms")
 
@@ -36,6 +40,8 @@ class Lan(Module):
     blurb = "Every device on the home network, with newcomers flagged"
     aliases = ("lan", "sonar")
     order = 85
+    fps = 15
+    footer_color = CDIM
 
     def start(self, ctx):
         super().start(ctx)
@@ -86,71 +92,96 @@ class Lan(Module):
 
     def _color(self, d):
         if d.new:
-            return theme.SODIUM
-        return theme.LICHEN if d.vendor == "Private address" else self.key
+            return NEWC
+        return CDIM if d.vendor == "Private address" else CYAN
+
+    def draw_frame(self, surf):
+        surf.fill(DEEPSEA)
+        pygame.draw.circle(surf, WATER, (CX, CY), R)
+        for k in range(1, 4):                         # dashed range rings
+            r = int(R * (0.15 + 0.25 * k))
+            for a in range(0, 360, 6):
+                a0, a1 = math.radians(a), math.radians(a + 3)
+                pygame.draw.line(surf, RINGC, (CX + r * math.sin(a0), CY - r * math.cos(a0)),
+                                 (CX + r * math.sin(a1), CY - r * math.cos(a1)), 1)
+        pygame.draw.circle(surf, RINGC, (CX, CY), R, 2)
+        pygame.draw.line(surf, RINGC, (CX - R, CY), (CX + R, CY), 1)
+        pygame.draw.line(surf, RINGC, (CX, CY - R), (CX, CY + R), 1)
+        text.draw(surf, "Sonar", (30, 24), "term", 34, CYAN)
+        text.draw(surf, "home network", (30, 62), "term", 18, CDIM)
+        text.draw(surf, "nearer the middle answers faster", (CX, CY + R + 12), "term", 16, CDIM, anchor="midtop")
 
     def draw_static(self, surf):
-        pygame.draw.circle(surf, theme.DEEP, (CX, CY), R)
-        for i, lbl in ((1, "fast"), (2, ""), (3, "slow")):
-            pygame.draw.circle(surf, theme.TIDE, (CX, CY), int(R * (0.15 + 0.25 * i)), 1)
-        pygame.draw.circle(surf, self.key, (CX, CY), 4)
-        text.draw(surf, "Closer to the middle answers pings faster", (CX, CY + R + 14), "sans", 14, theme.LICHEN,
-                  anchor="midtop")
+        pygame.draw.circle(surf, CYAN, (CX, CY), 4)
         devs = self.src.value
+        self._contacts = []
         if devs is None:
             msg = {"offline": "Couldn't read the network neighbor table on this machine.",
                    "waiting": "Listening to the network."}.get(self.src.status, "")
-            text.draw(surf, "—", (RX0, 24), "display", 150, theme.TIDE)
-            for i, line in enumerate(text.wrap(msg, "sans", 20, RX1 - RX0)):
-                text.draw(surf, line, (RX0, 200 + i * 28), "sans", 20, theme.LICHEN)
+            text.draw(surf, "No contacts", (RX0, 24), "term", 54, CYAN)
+            for i, line in enumerate(text.wrap(msg, "term", 20, RX1 - RX0)):
+                text.draw(surf, line, (RX0, 100 + i * 28), "term", 20, CDIM)
             return
         taken = []
         for d in devs:
             x, y = self._xy(d)
             col = self._color(d)
-            pygame.draw.circle(surf, col, (int(x), int(y)), 6 if d.new else 5)
-            box = pygame.Rect(x + 8, y - 9, 120, 20)
+            dist = math.hypot(x - CX, y - CY)
+            self._contacts.append((int(x), int(y), dist, col))
+            if d.new:                                  # newcomers get a triangle, like an unknown contact
+                pygame.draw.polygon(surf, col, [(x, y - 7), (x + 7, y + 5), (x - 7, y + 5)], 2)
+            else:
+                pygame.draw.circle(surf, theme.mix(WATER, col, 0.6), (int(x), int(y)), 4)
+            box = pygame.Rect(x + 9, y - 9, 120, 20)
             if not any(box.colliderect(t) for t in taken):
                 taken.append(box)
-                text.draw(surf, d.label, (x + 10, y - 9), "sans", 14, col, max_w=118)
+                text.draw(surf, d.label, (x + 10, y - 9), "term", 15, theme.mix(WATER, col, 0.8), max_w=118)
         self._rail(surf, devs)
 
     def _rail(self, surf, devs):
         live = [d for d in devs if d.state in ("REACHABLE", "DELAY", "PROBE") or d.rtt_ms is not None]
-        r = text.draw(surf, str(len(live)), (RX0 - 4, 24), "display", 150, theme.BONE)
-        text.draw(surf, f"devices answering now, {len(devs)} seen recently", (RX0, r.bottom - 8), "sans", 20,
-                  theme.LICHEN, max_w=RX1 - RX0)
-        y = r.bottom + 30
+        text.draw(surf, f"{len(live)} contacts", (RX0, 22), "term", 54, CYAN)
+        text.draw(surf, f"answering now, {len(devs)} seen recently", (RX0, 84), "term", 20, CDIM, max_w=RX1 - RX0)
+        y = 120
         new = [d for d in devs if d.new]
         if new:
-            text.draw(surf, f"New today: {', '.join(d.label for d in new[:3])}", (RX0, y), "sans-500", 20,
-                      theme.SODIUM, max_w=RX1 - RX0)
-            y += 32
+            text.draw(surf, f"New today: {', '.join(d.label for d in new[:3])}", (RX0, y), "term", 20, NEWC,
+                      max_w=RX1 - RX0)
+            y += 30
         if not self.subnet:
-            text.draw(surf, "Set [lan] subnet in config.toml to sweep for quiet devices.", (RX0, y), "sans", 16,
-                      theme.LICHEN, max_w=RX1 - RX0)
+            text.draw(surf, "Set [lan] subnet in config.toml to sweep for quiet devices.", (RX0, y), "term", 16,
+                      CDIM, max_w=RX1 - RX0)
             y += 26
-        pygame.draw.line(surf, theme.TIDE, (RX0, y + 4), (RX1, y + 4), 1)
-        y += 18
+        y += 8
+        text.draw(surf, "contact", (RX0 + 18, y), "term", 16, CDIM)
+        text.draw(surf, "address", (RX0 + 250, y), "term", 16, CDIM)
+        text.draw(surf, "echo", (RX1, y), "term", 16, CDIM, anchor="topright")
+        pygame.draw.line(surf, RINGC, (RX0, y + 24), (RX1, y + 24), 1)
+        y += 34
         rows = sorted(devs, key=lambda d: (not d.new, d.rtt_ms is None, d.rtt_ms or 0))
         for d in rows:
-            if y > 660:
+            if y > 664:
                 break
             col = self._color(d)
-            pygame.draw.circle(surf, col, (RX0 + 5, y + 11), 4)
-            text.draw(surf, d.label, (RX0 + 18, y), "sans-500", 18, theme.BONE, max_w=210)
-            text.draw(surf, d.ip, (RX0 + 236, y + 1), "sans", 16, theme.LICHEN)
-            rtt = f"{d.rtt_ms:.0f} ms" if d.rtt_ms is not None else ""
-            text.draw(surf, rtt, (RX1, y + 1), "sans", 16, theme.LICHEN, anchor="topright")
-            y += 28
+            pygame.draw.circle(surf, col, (RX0 + 5, y + 10), 4)
+            text.draw(surf, d.label, (RX0 + 18, y), "term", 19, WHITE if not d.new else NEWC, max_w=224)
+            text.draw(surf, d.ip, (RX0 + 250, y + 1), "term", 18, CDIM)
+            rtt = f"{d.rtt_ms:.0f} ms" if d.rtt_ms is not None else "silent"
+            text.draw(surf, rtt, (RX1, y + 1), "term", 18, CDIM, anchor="topright")
+            y += 27
 
     def draw_live(self, surf, t):
-        ang = (t % 30) / 30 * 2 * math.pi
-        for k in range(10):
-            a = ang - k * 0.035
-            pygame.draw.line(surf, theme.mix(theme.DEEP, self.key, 0.45 * (1 - k / 10)), (CX, CY),
-                             (CX + R * math.sin(a), CY - R * math.cos(a)), 2)
-        return False
+        # a ping ring expands from the middle; each contact flares as the ring reaches it
+        k = (t % PING_S) / PING_S
+        r = int(k * R)
+        if r > 2:
+            pygame.draw.circle(surf, theme.mix(WATER, CYAN, 0.9 * (1 - k)), (CX, CY), r, 2)
+        for x, y, dist, col in getattr(self, "_contacts", []):
+            behind = r - dist
+            if 0 <= behind < 60:
+                f = 1 - behind / 60
+                pygame.draw.circle(surf, theme.mix(WATER, col, f), (x, y), 4 + int(4 * f))
+        return True
 
 
 MODULE = Lan
