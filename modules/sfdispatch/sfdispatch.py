@@ -19,7 +19,8 @@ from feed import LA, Feed, now_la, stats  # noqa: E402
 from geo import Projector  # noqa: E402
 from replay import Replayer  # noqa: E402
 
-W, H, FPS = 1280, 720, 30
+W, H, FPS = 1280, 720, 24
+IDLE_FPS = 8           # nothing but slow pulses on screen
 POLL_S = 60
 MAP = (20, 72, 860, 520)
 QUEUE = (900, 72, 360, 520)
@@ -221,14 +222,24 @@ def draw_dispatch(screen, rect, st):
                 anchor="topright")
 
 
-def draw_map_overlay(screen, proj, active, highlight_call, t, st):
-    """Per-frame: arrival ripples, pulsing priority-A pins, highlight ring."""
+def draw_map_legend(screen, st):
+    x, y, w, h = MAP
+    if st and st.unplotted:
+        ui.text(screen, f"{st.unplotted:,} calls without a public location (sensitive or unmapped)",
+                (x + 12, y + h - 22), 11, ui.DIM, max_w=w - 24)
+    lx = x + 12
+    for p, name in (("A", "emergency"), ("B", "urgent"), ("C", "routine")):
+        pygame.draw.circle(screen, ui.PRIORITY[p], (lx + 4, y + 18), 4)
+        r = ui.text(screen, f"{p} {name}", (lx + 12, y + 11), 11, ui.MUTED)
+        lx = r.right + 16
+
+
+def draw_anim(screen, proj, active, highlight_call, t):
+    """Per-frame: arrival ripples and the highlight ring."""
     for c, t0 in active:
         p = proj.to_px(c.lon, c.lat) if c.lon is not None else None
-        if not p:
-            continue
         k = (t - t0) / RIPPLE_S
-        if 0 <= k < 1:
+        if p and 0 <= k < 1:
             col = ui.PRIORITY.get(c.priority, ui.MUTED)
             r = int(4 + 22 * k)
             s = pygame.Surface((2 * r + 4, 2 * r + 4), pygame.SRCALPHA)
@@ -237,28 +248,41 @@ def draw_map_overlay(screen, proj, active, highlight_call, t, st):
     if highlight_call and highlight_call.lon is not None:
         p = proj.to_px(highlight_call.lon, highlight_call.lat)
         if p:
-            r = 10 + 2 * math.sin(t * 4)
-            pygame.draw.circle(screen, ui.TEXT, p, int(r), 1)
-    x, y, w, h = MAP
-    if st and st.unplotted:
-        ui.text(screen, f"{st.unplotted:,} calls without a public location (sensitive or unmapped)",
-                (x + 12, y + h - 22), 11, ui.DIM, max_w=w - 24)
-    legend = [("A", "emergency"), ("B", "urgent"), ("C", "routine")]
-    lx = x + 12
-    for p, name in legend:
-        pygame.draw.circle(screen, ui.PRIORITY[p], (lx + 4, y + 18), 4)
-        r = ui.text(screen, f"{p} {name}", (lx + 12, y + 11), 11, ui.MUTED)
-        lx = r.right + 16
+            pygame.draw.circle(screen, ui.TEXT, p, int(10 + 2 * math.sin(t * 4)), 1)
 
 
-def pulse_a(screen, proj, calls, now, t):
+def a_positions(proj, calls, now):
+    out = []
     for c in calls:
-        if c.priority != "A" or c.lon is None or age_min(c, now) > FADE_MIN:
-            continue
-        p = proj.to_px(c.lon, c.lat)
-        if p:
-            k = (math.sin(t * 3 + hash(c.cad) % 7) + 1) / 2
-            pygame.draw.circle(screen, (255, 120, 120), p, int(4 + 2 * k), 1)
+        if c.priority == "A" and c.lon is not None and age_min(c, now) <= FADE_MIN:
+            p = proj.to_px(c.lon, c.lat)
+            if p:
+                out.append((p, hash(c.cad) % 7))
+    return out
+
+
+def pulse_a(screen, positions, t):
+    for p, phase in positions:
+        k = (math.sin(t * 3 + phase) + 1) / 2
+        pygame.draw.circle(screen, (255, 120, 120), p, int(4 + 2 * k), 1)
+
+
+def build_frame(frame, map_layer, st, status, age, now, recent, highlight):
+    """Everything that does not animate, composed once per data change."""
+    frame.fill(ui.BG)
+    frame.blit(map_layer, MAP[:2])
+    pygame.draw.rect(frame, ui.EDGE, MAP, 1, border_radius=2)
+    draw_map_legend(frame, st)
+    draw_header(frame, st, status, age, now)
+    draw_queue(frame, recent, highlight, now)
+    gap, pw = 20, (W - 40 - 40) // 3
+    draw_bars(frame, (20, BOTTOM_Y, pw, BOTTOM_H), "CALL TYPES · 24H",
+              st.top_types if st else [], ui.ACCENT)
+    draw_bars(frame, (20 + pw + gap, BOTTOM_Y, pw, BOTTOM_H), "BUSIEST NEIGHBORHOODS · 24H",
+              st.top_hoods if st else [], ui.AMBER)
+    draw_dispatch(frame, (20 + 2 * (pw + gap), BOTTOM_Y, pw, BOTTOM_H), st)
+    ui.text(frame, "legitbiz.research", (W - 20, H - 6), 11, ui.DIM, anchor="bottomright")
+    ui.text(frame, "data.sf.gov · gnap-fj3t", (20, H - 6), 11, ui.DIM, anchor="bottomleft")
 
 
 def main():
@@ -274,8 +298,8 @@ def main():
     proj = Projector(MAP)
     base, hood_polys = render_basemap(proj, load_basemap())
     glow = render_hood_glow(hood_polys, [])
-    pins = pygame.Surface(MAP[2:], pygame.SRCALPHA)
-    last_layer = -1e9
+    map_layer = pygame.Surface(MAP[2:]).convert()
+    frame = pygame.Surface((W, H)).convert()
 
     fetcher = Fetcher()
     fetcher.start()
@@ -284,13 +308,15 @@ def main():
     active = []         # (call, reveal_t) for ripples
     st, status, age = None, "CONNECTING", None
     highlight = -1
-    dirty = True
+    map_dirty = frame_dirty = True
+    last_map = last_frame_key = None
+    recent, a_pos = [], []
     snap = os.environ.get("SFD_SNAPSHOT")          # dev: save a frame and exit
     snap_after = float(os.environ.get("SFD_SNAPSHOT_AFTER", "8"))
     t_start = time.monotonic()
 
     while True:
-        clock.tick(FPS)
+        clock.tick(FPS if active else IDLE_FPS)
         t = time.monotonic()
         now = now_la()
         for e in pygame.event.get():
@@ -299,46 +325,44 @@ def main():
                 return
             if e.type == pygame.KEYDOWN and e.key in (pygame.K_SPACE, pygame.K_RIGHT):
                 highlight = (highlight + 1) % 12
+                frame_dirty = True
 
-        batches, new_st, status, age = fetcher.take()
+        batches, new_st, new_status, new_age = fetcher.take()
         for b, initial in batches:
             replayer.add(b, t, initial=initial)
-        if new_st is not st and new_st is not None:
+        if new_st is not None and new_st is not st:
             st = new_st
             glow = render_hood_glow(hood_polys, fetcher.feed.calls[:])
+            map_dirty = True
+        if (new_status, new_age) != (status, age):
+            status, age = new_status, new_age
+            frame_dirty = True
         for c in replayer.due(t):
             shown.append(c)
             active.append((c, t))
-            dirty = True
+            map_dirty = True
         active = [(c, t0) for c, t0 in active if t - t0 < RIPPLE_S]
         cutoff = now - timedelta(hours=24)
         if shown and shown[0].received < cutoff:
             shown = [c for c in shown if c.received >= cutoff]
 
-        if dirty or t - last_layer > LAYER_REFRESH_S:
-            pins = render_pins(proj, shown, now)
-            last_layer, dirty = t, False
+        if map_dirty or last_map is None or t - last_map > LAYER_REFRESH_S:
+            map_layer.blit(base, (0, 0))
+            map_layer.blit(glow, (0, 0))
+            map_layer.blit(render_pins(proj, shown, now), (0, 0))
+            recent = sorted((c for c in shown if c.type not in QUEUE_SKIP),
+                            key=lambda c: c.received, reverse=True)[:12]
+            a_pos = a_positions(proj, shown[-300:], now)
+            last_map, map_dirty, frame_dirty = t, False, True
+        key = now.strftime("%H:%M")
+        if frame_dirty or key != last_frame_key:
+            build_frame(frame, map_layer, st, status, age, now, recent, highlight)
+            last_frame_key, frame_dirty = key, False
 
-        screen.fill(ui.BG)
-        screen.blit(base, MAP[:2])
-        screen.blit(glow, MAP[:2])
-        screen.blit(pins, MAP[:2])
-        pygame.draw.rect(screen, ui.EDGE, MAP, 1, border_radius=2)
-        recent = sorted((c for c in shown if c.type not in QUEUE_SKIP),
-                        key=lambda c: c.received, reverse=True)[:12]
+        screen.blit(frame, (0, 0))
+        pulse_a(screen, a_pos, t)
         hl = recent[highlight] if 0 <= highlight < len(recent) else None
-        pulse_a(screen, proj, shown[-300:], now, t)
-        draw_map_overlay(screen, proj, active, hl, t, st)
-        draw_header(screen, st, status, age, now)
-        draw_queue(screen, recent, highlight, now)
-        gap, pw = 20, (W - 40 - 40) // 3
-        draw_bars(screen, (20, BOTTOM_Y, pw, BOTTOM_H), "CALL TYPES · 24H",
-                  st.top_types if st else [], ui.ACCENT)
-        draw_bars(screen, (20 + pw + gap, BOTTOM_Y, pw, BOTTOM_H), "BUSIEST NEIGHBORHOODS · 24H",
-                  st.top_hoods if st else [], ui.AMBER)
-        draw_dispatch(screen, (20 + 2 * (pw + gap), BOTTOM_Y, pw, BOTTOM_H), st)
-        ui.text(screen, "legitbiz.research", (W - 20, H - 6), 11, ui.DIM, anchor="bottomright")
-        ui.text(screen, "data.sf.gov · gnap-fj3t", (20, H - 6), 11, ui.DIM, anchor="bottomleft")
+        draw_anim(screen, proj, active, hl, t)
         pygame.display.flip()
         if snap and t - t_start > snap_after:
             pygame.image.save(screen, snap)

@@ -9,6 +9,9 @@ LA = ZoneInfo("America/Los_Angeles")
 DEFAULT_URL = "https://data.sf.gov/resource/gnap-fj3t.json"
 WINDOW = timedelta(hours=24)
 STALE_AFTER = timedelta(minutes=30)
+COLUMNS = ("cad_number", "received_datetime", "dispatch_datetime", "call_type_final_desc",
+           "call_type_original_desc", "priority_final", "priority_original", "intersection_name",
+           "intersection_point", "analysis_neighborhood", "data_loaded_at")
 OVERLAP = timedelta(minutes=30)  # re-read recent rows; dedupe absorbs repeats
 
 
@@ -86,6 +89,7 @@ def parse_call(raw):
 def build_url(since):
     base = os.environ.get("SFD_URL") or DEFAULT_URL
     q = {
+        "$select": ",".join(COLUMNS),
         "$where": f"received_datetime > '{since.strftime('%Y-%m-%dT%H:%M:%S')}'",
         "$order": "received_datetime ASC",
         "$limit": "5000",

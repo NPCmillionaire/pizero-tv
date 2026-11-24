@@ -168,3 +168,14 @@ def test_titlecase_keeps_acronyms_and_ordinals():
     assert titlecase("FIGHT NO WEAPON DV") == "Fight No Weapon DV"
     assert titlecase("01ST ST \\ LANSING ST") == "01st St \\ Lansing St"
     assert titlecase("FIGHT W/WEAPON") == "Fight W/Weapon"
+
+
+def test_build_url_selects_only_needed_columns(monkeypatch):
+    monkeypatch.delenv("SFD_URL", raising=False)
+    from urllib.parse import parse_qs, urlparse
+    q = parse_qs(urlparse(build_url(NOW)).query)
+    cols = set(q["$select"][0].split(","))
+    assert cols == {"cad_number", "received_datetime", "dispatch_datetime", "call_type_final_desc",
+                    "call_type_original_desc", "priority_final", "priority_original",
+                    "intersection_name", "intersection_point", "analysis_neighborhood",
+                    "data_loaded_at"}
