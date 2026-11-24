@@ -11,7 +11,7 @@ TV = os.path.join(ROOT, "bin", "tv")
 LISTING_S = 6 * 3600
 ORPHAN_PATTERN = ORPHAN_MPV
 X0 = 190
-DEFAULT_SHORTS = ["@veritasium", "@SmarterEveryDay", "@minutephysics", "@TomScottGo", "@standupmaths"]
+DEFAULT_SHORTS = ["@veritasium", "@minutephysics", "@SteveMould", "@TheActionLab", "@NileRed"]   # all have Shorts tabs
 
 
 def ytdlp_path():
@@ -19,15 +19,15 @@ def ytdlp_path():
     return local if os.access(local, os.X_OK) else shutil.which("yt-dlp")
 
 
-def fetch_listing(urls, stop=None, per=25):
+def fetch_listing(urls, stop=None, per=15):
     """List uploads for each URL with yt-dlp. Stops (and kills yt-dlp) as soon as `stop` is set."""
     ytdl = ytdlp_path()
     if not ytdl:
         raise RuntimeError("yt-dlp is not installed")
     # one yt-dlp run for every URL: on a Pi Zero, yt-dlp's own startup is most of the cost
-    p = subprocess.Popen([ytdl, "--flat-playlist", "-J", "--ignore-errors", "--playlist-end", str(per), *urls],
+    p = subprocess.Popen(["nice", "-n", "15", ytdl, "--flat-playlist", "-J", "--ignore-errors", "--playlist-end", str(per), *urls],
                          stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True)
-    deadline = time.monotonic() + 300
+    deadline = time.monotonic() + 900                     # a busy, swapping Pi Zero can be slow
     while True:
         try:
             out, _ = p.communicate(timeout=1)
