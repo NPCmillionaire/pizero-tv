@@ -51,6 +51,16 @@ def titlecase(s):
     return " ".join(word(w) for w in s.split(" "))
 
 
+EXPAND = {"Traf": "Traffic", "Unkn": "Unknown", "Veh": "Vehicle", "Susp": "Suspicious", "Mtr": "Motor",
+          "Viol": "Violation", "Prk": "Parking", "Info": "Information", "Ass": "Assault"}
+
+
+def call_type(s):
+    """SFPD shorthand to plain words: 'TRAF VIOLATION CITE' -> 'Traffic Violation Cite'."""
+    words = titlecase(s).replace("W/", "with ").split()
+    return " ".join(EXPAND.get(w, w) for w in words)
+
+
 def now_la():
     return datetime.now(LA)
 
@@ -79,7 +89,7 @@ def parse_call(raw):
     pr = (raw.get("priority_final") or raw.get("priority_original") or "").upper()
     return Call(
         cad=cad, received=received, dispatched=_ts(raw.get("dispatch_datetime")),
-        type=titlecase(raw.get("call_type_final_desc") or raw.get("call_type_original_desc") or "Unknown"),
+        type=call_type(raw.get("call_type_final_desc") or raw.get("call_type_original_desc") or "Unknown"),
         priority=pr if pr in ("A", "B", "C") else "?",
         place=titlecase((raw.get("intersection_name") or "").replace("\\", "/")),
         hood=raw.get("analysis_neighborhood") or "Unknown",
@@ -125,19 +135,22 @@ class Feed:
     def calls(self):
         return sorted(self._by_cad.values(), key=lambda c: c.received)
 
-    def poll(self):
-        now = self.clock()
-        cutoff = now - WINDOW
+    def next_url(self):
+        """URL for the next read: the full 24 h window every FULL_EVERY reads, else recent rows."""
+        cutoff = self.clock() - WINDOW
         full = self._n % FULL_EVERY == 0 or not self._by_cad
         since = cutoff if full else max(c.received for c in self._by_cad.values()) - OVERLAP
-        try:
-            rows = self.fetch(build_url(since))
-        except Exception:
-            self.status = "OFFLINE"
-            return []
+        return build_url(since)
+
+    def ingest(self, rows):
+        """Merge a page of raw rows. Returns calls seen for the first time, oldest first."""
+        if not isinstance(rows, list):
+            raise ValueError(f"expected a list of rows, got {type(rows).__name__}")
+        now = self.clock()
+        cutoff = now - WINDOW
         self._n += 1
         new = []
-        for raw in rows if isinstance(rows, list) else []:
+        for raw in rows:
             try:
                 loaded = _ts(raw.get("data_loaded_at"))
                 c = parse_call(raw)
@@ -153,6 +166,13 @@ class Feed:
         self.data_age = now - self._loaded if self._loaded else None
         self.status = "LIVE" if self.data_age is not None and self.data_age <= STALE_AFTER else "STALE"
         return sorted(new, key=lambda c: c.received)
+
+    def poll(self):
+        try:
+            return self.ingest(self.fetch(self.next_url()))
+        except Exception:
+            self.status = "OFFLINE"
+            return []
 
 
 def stats(calls):

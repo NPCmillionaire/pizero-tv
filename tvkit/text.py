@@ -58,3 +58,16 @@ def draw(surf, s, pos, role="sans", size=20, color=theme.BONE, max_w=None, ancho
         OVERFLOWS.append((s, r))
     surf.blit(img, r)
     return r
+
+
+def wrap(s, role, size, max_w):
+    """Greedy word wrap to lines that each render within max_w px."""
+    f, lines, cur = font(role, size), [], ""
+    for w in s.split():
+        nxt = (cur + " " + w).strip()
+        if f.size(nxt)[0] <= max_w or not cur:
+            cur = nxt
+        else:
+            lines.append(cur)
+            cur = w
+    return lines + ([cur] if cur else [])

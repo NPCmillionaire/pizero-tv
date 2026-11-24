@@ -12,6 +12,7 @@ class Ctx:
     cache_dir: str | None
     w: int = theme.W
     h: int = theme.H
+    fakes: dict | None = None   # tests: {source name: payload, "__mode__": waiting|live|stale|offline}
 
 
 class Module:
@@ -38,10 +39,29 @@ class Module:
         self.sources = []
 
     def source(self, name, fetch, interval, parse=lambda x: x, cache=True):
+        """Register a polled Source (started immediately on its own thread)."""
+        fakes = self.ctx.fakes if self.ctx else None
+        if fakes is not None:
+            return self._fake_source(name, interval, parse, fakes)
         cache_dir = self.ctx.cache_dir if (cache and self.ctx and self.ctx.cache_dir) else None
         s = Source(name, fetch, interval, parse=parse, cache_dir=cache_dir)
         self.sources.append(s)
         return s.start()
+
+    def _fake_source(self, name, interval, parse, fakes):
+        mode, payload = fakes.get("__mode__", "live"), fakes.get(name)
+
+        def fetch():
+            if mode == "offline" or payload is None:
+                raise ConnectionError("fake offline")
+            return payload
+        s = Source(name, fetch, interval, parse=parse)
+        self.sources.append(s)
+        if mode in ("live", "stale", "offline"):
+            s.poll_once()
+        if mode == "stale":
+            s._last_ok = False
+        return s
 
     # host hooks -----------------------------------------------------------
     @property

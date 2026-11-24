@@ -1,8 +1,8 @@
 from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 
-from feed import Call
-from replay import Replayer, schedule
+from modules.sfdispatch.feed import Call
+from modules.sfdispatch.replay import Replayer, schedule
 
 T0 = datetime(2026, 11, 23, 18, 0, tzinfo=ZoneInfo("America/Los_Angeles"))
 

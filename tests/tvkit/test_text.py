@@ -34,3 +34,8 @@ def test_draw_without_max_w_records_offscreen_overflow():
     text.OVERFLOWS.clear()
     text.draw(s, "this string is far too wide for the surface", (0, 0))
     assert len(text.OVERFLOWS) == 1
+
+
+def test_wrap_lines_fit():
+    lines = text.wrap("data.sf.gov isn't answering. Nothing is shown rather than a guess.", "sans", 20, 200)
+    assert len(lines) > 1 and all(text.font("sans", 20).size(l)[0] <= 200 for l in lines)

@@ -3,8 +3,8 @@ from zoneinfo import ZoneInfo
 
 import pytest
 
-import feed
-from feed import Feed, build_url, parse_call, stats
+from modules.sfdispatch import feed
+from modules.sfdispatch.feed import Feed, build_url, parse_call, stats
 
 LA = ZoneInfo("America/Los_Angeles")
 NOW = datetime(2026, 11, 23, 18, 55, 0, tzinfo=LA)
@@ -33,7 +33,7 @@ def test_parse_basic():
     assert c.received == datetime(2026, 11, 23, 18, 40, 53, tzinfo=LA)
     assert c.received.tzinfo == LA
     assert c.dispatched - c.received == timedelta(seconds=99)
-    assert c.type == "Traf Violation Cite"
+    assert c.type == "Traffic Violation Cite"
     assert c.priority == "C" and c.hood == "Nob Hill"
     assert c.place == "Sutter St / Van Ness Ave"
 
@@ -140,7 +140,7 @@ def test_stats():
     assert s.median_dispatch["A"] == timedelta(seconds=120)
     assert "C" not in s.median_dispatch
     assert s.top_hoods[0] == ("Nob Hill", 3)
-    assert s.top_types[0] == ("Traf Violation Cite", 4)
+    assert s.top_types[0] == ("Traffic Violation Cite", 4)
 
 
 def test_incremental_poll_overlaps_30min():
@@ -164,7 +164,7 @@ def test_top_hoods_excludes_unknown():
 
 
 def test_titlecase_keeps_acronyms_and_ordinals():
-    from feed import titlecase
+    from modules.sfdispatch.feed import titlecase
     assert titlecase("FIGHT NO WEAPON DV") == "Fight No Weapon DV"
     assert titlecase("01ST ST \\ LANSING ST") == "01st St \\ Lansing St"
     assert titlecase("FIGHT W/WEAPON") == "Fight W/Weapon"
@@ -214,3 +214,27 @@ def test_malformed_rows_are_skipped():
     got = f.poll()
     assert [c.cad for c in got] == ["263272725"]
     assert f.status == "LIVE"
+
+
+def test_next_url_then_ingest_matches_poll():
+    f = Feed(fetch=None, clock=lambda: NOW)
+    url = f.next_url()
+    assert "2026-11-22T18%3A55%3A00" in url          # first read: full 24 h window
+    got = f.ingest([SAMPLE])
+    assert [c.cad for c in got] == ["263272725"] and f.status == "LIVE"
+    assert "2026-11-23T18%3A10%3A53" in f.next_url()  # incremental, 30 min overlap
+
+
+def test_ingest_garbage_payload_raises_for_source():
+    f = Feed(fetch=None, clock=lambda: NOW)
+    with pytest.raises(ValueError):
+        f.ingest("<html>")
+
+
+def test_call_types_expand_sfpd_abbreviations():
+    from modules.sfdispatch.feed import titlecase
+    assert parse_call(dict(SAMPLE, call_type_final_desc="TRAF VIOLATION CITE")).type == "Traffic Violation Cite"
+    assert parse_call(dict(SAMPLE, call_type_final_desc="COMPLAINT UNKN")).type == "Complaint Unknown"
+    assert parse_call(dict(SAMPLE, call_type_final_desc="INJURY VEH ACCIDENT")).type == "Injury Vehicle Accident"
+    assert parse_call(dict(SAMPLE, call_type_final_desc="PERSON W/KNIFE")).type == "Person with Knife"
+    assert titlecase("01ST ST") == "01st St"     # streets are not expanded
