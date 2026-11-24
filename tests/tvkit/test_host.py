@@ -354,3 +354,22 @@ def test_module_draws_its_own_frame():
     h.show("own")
     run(h, c, 1.0)
     assert tuple(h.screen.get_at((10, 360)))[:3] == (200, 0, 0)     # no spine: the channel owns the screen
+
+
+def test_mirror_connect_tunes_in_and_disconnect_returns():
+    a, b, term = mod("aa"), mod("bbb"), mod("terminal", in_cycle=False, resume=False)
+    h, c = make(a, b, term)
+    h.cycle(60)
+    run(h, c, 1)
+    h.mirror_event("connected")
+    assert h.current.name == "terminal" and h.mode == "show"
+    h.mirror_event("disconnected")
+    assert h.mode == "cycle" and h.current.name == "aa"
+
+
+def test_channels_left_out_of_the_cycle():
+    a, term = mod("aa"), mod("terminal", in_cycle=False)
+    h, c = make(a, term)
+    h.cycle(10)
+    run(h, c, 15)
+    assert h.current.name == "aa"

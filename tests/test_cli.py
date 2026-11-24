@@ -90,3 +90,25 @@ def test_service_restarts_forever_outside_any_ssh_session():
     assert p["Service"]["Restart"] == "always"
     assert p["Unit"]["StartLimitIntervalSec"] == "0"
     assert p["Install"]["WantedBy"] == "default.target"
+
+
+def test_mirror_with_a_host_pipes_into_ssh(monkeypatch):
+    from tvkit import cli
+    seen = {}
+
+    class P:
+        stdin = object()
+
+        def __init__(self, argv, **kw):
+            seen["argv"], seen["kw"] = argv, kw
+
+        def wait(self, timeout=None):
+            return 0
+
+        def terminate(self):
+            pass
+    monkeypatch.setattr(cli.subprocess, "Popen", P)
+    monkeypatch.setattr(cli, "_run_mirror", lambda send, label: seen.setdefault("send", send) and 0)
+    assert cli.main(["mirror", "-H", "pizero"]) == 0
+    assert seen["argv"][:2] == ["ssh", "-T"] and "pizero" in seen["argv"] and seen["argv"][-1] == "mirror-in"
+    assert cli.main(["-H", "pizero", "mirror"]) == 0

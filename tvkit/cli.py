@@ -16,6 +16,7 @@ HELP = """usage: tv [-H HOST] <command>
   tv stop                standby screen
   tv list                installed modules
   tv screenshot [PATH]   save what the TV shows (PNG)
+  tv mirror [-H HOST]    put this terminal on the TV (TERMINAL channel) until you exit the shell
   tv logs                follow the display host's log
   tv start               start the display host if it isn't running
 
@@ -104,8 +105,63 @@ def _start():
     return 0
 
 
+def _run_mirror(send, label):
+    from . import mirror
+    return mirror.run_mirror(send, label)
+
+
+def _mirror(host):
+    import socket as _s
+    label = _s.gethostname().split(".")[0]
+    if host:
+        p = subprocess.Popen(["ssh", "-T", "-o", "ConnectTimeout=10", host, REMOTE_TV, "mirror-in"],
+                             stdin=subprocess.PIPE)
+        print(f"Mirroring this terminal to {host}. Exit the shell to stop.\r")
+        try:
+            return _run_mirror(p.stdin, label)
+        finally:
+            try:
+                p.stdin.close()
+            except Exception:
+                pass
+            p.terminate()
+    from . import mirror
+    sock = _s.socket(_s.AF_UNIX, _s.SOCK_STREAM)
+    try:
+        sock.connect(mirror.default_path())
+    except OSError:
+        print("The display host isn't taking mirrors here. Is it running, with python3-pyte installed?",
+              file=sys.stderr)
+        return 1
+    return _run_mirror(sock.makefile("wb"), label)
+
+
+def _mirror_in():
+    """Remote end of `tv mirror -H`: copy stdin into the host's mirror socket."""
+    import socket as _s
+    from . import mirror
+    sock = _s.socket(_s.AF_UNIX, _s.SOCK_STREAM)
+    try:
+        sock.connect(mirror.default_path())
+    except OSError:
+        print("The display host isn't taking mirrors (is it running, with python3-pyte installed?)",
+              file=sys.stderr)
+        return 1
+    while True:
+        data = sys.stdin.buffer.read1(65536)
+        if not data:
+            return 0
+        sock.sendall(data)
+
+
 def main(argv=None, reg=None):
     args = list(sys.argv[1:] if argv is None else argv)
+    if "mirror" in args[:3] and args[:1] in (["mirror"], ["-H"]):
+        rest = [a for a in args if a != "mirror"]
+        host = rest[1] if rest[:1] == ["-H"] and len(rest) > 1 else None
+        return _mirror(host)
+    if args[:1] == ["mirror-in"]:
+        return _mirror_in()
     if args[:1] in (["-h"], ["--help"], ["help"]):
         print(HELP)
         return 0

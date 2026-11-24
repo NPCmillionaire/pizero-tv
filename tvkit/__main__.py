@@ -44,6 +44,11 @@ def main(argv=None):
         host.show(args.only)
     else:
         server = control.Server(control.default_path())
+        from . import mirror
+        try:
+            host.mirror = mirror.Server()
+        except OSError as ex:
+            print(f"terminal mirroring is off: {ex}", file=sys.stderr)
         host.resume()
 
     running = [True]
@@ -64,6 +69,10 @@ def main(argv=None):
                         host.key(e)
             if server:
                 server.poll(host.handle)
+            if host.mirror:
+                ev = host.mirror.poll()
+                if ev:
+                    host.mirror_event(ev)
             fps = host.step()
             pygame.display.flip()
             if snap and time.monotonic() - t0 > snap_after:
@@ -75,6 +84,8 @@ def main(argv=None):
             host.current.stop()
         if server:
             server.close()
+        if host.mirror:
+            host.mirror.close()
         pygame.quit()
 
 

@@ -26,6 +26,7 @@ class Host:
         self._standby_min = None
         self.osd_t = -1e9
         self._digits, self._digit_t = "", None
+        self.mirror, self._before_mirror = None, None
 
     # -- commands ------------------------------------------------------------
     def show(self, name, mode="show"):
@@ -42,7 +43,7 @@ class Host:
         try:
             self.current = cls()
             cache = os.path.join(self.cache_root, cls.name) if self.cache_root else None
-            self.current.start(Ctx(self.config, cache, registry=self.registry))
+            self.current.start(Ctx(self.config, cache, registry=self.registry, mirror=self.mirror))
         except Exception:
             self._crash(traceback.format_exc())
         self._save()
@@ -251,7 +252,25 @@ class Host:
 
     # -- helpers -------------------------------------------------------------
     def _order(self):
-        return self.cycle_names or self.registry.names()
+        return self.cycle_names or [n for n in self.registry.names()
+                                    if getattr(self.registry.get(n), "in_cycle", True)]
+
+    def mirror_event(self, event):
+        """A terminal mirror connected or went away: tune to TERMINAL, then back to whatever was on."""
+        if event == "connected" and self.registry.get("terminal"):
+            if not (self.cls and self.cls.name == "terminal"):
+                self._before_mirror = (self.mode, self.cls.name if self.cls else None, self.cycle_seconds,
+                                       self.cycle_names)
+            self.show("terminal")
+        elif event == "disconnected" and self.cls and self.cls.name == "terminal" and self._before_mirror:
+            mode, name, secs, names = self._before_mirror
+            self._before_mirror = None
+            if mode == "cycle":
+                self.cycle(secs, names, start=name)
+            elif mode == "standby" or not name:
+                self.standby()
+            else:
+                self.show(name)
 
     def _crash(self, tb):
         print(tb, file=sys.stderr, flush=True)

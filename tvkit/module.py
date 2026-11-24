@@ -14,6 +14,7 @@ class Ctx:
     h: int = theme.H
     fakes: dict | None = None   # tests: {source name: payload, "__mode__": waiting|live|stale|offline}
     registry: object = None     # the host's channel list (the guide reads it)
+    mirror: object = None       # the host's terminal-mirror server (the TERMINAL channel reads it)
 
 
 class Module:
@@ -25,6 +26,7 @@ class Module:
     order = 100           # position in the default cycle
     fps = 24              # frame rate while draw_live reports motion
     resume = True         # False: never reopened by a restarted host (video players)
+    in_cycle = True       # False: tune in by number or name only, never while cycling
     footer_color = None   # station bug color over this channel's background (None: theme default)
 
     def __init__(self):
