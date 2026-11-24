@@ -20,7 +20,7 @@ def test_spine_uses_max_168():
 
 
 @pytest.mark.parametrize("status,age,label", [
-    ("live", 5, "live"), ("stale", 720, "stale 12m"), ("stale", 7200, "stale 2h"),
+    ("live", 5, "live"), ("stale", 720, "stale 12m"), ("stale", 7200, "stale 2h"), ("stale", 30, "stale"),
     ("stale", None, "stale"), ("offline", None, "offline"), ("waiting", None, "waiting"),
 ])
 def test_footer_labels(status, age, label):

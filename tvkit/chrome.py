@@ -34,7 +34,7 @@ def draw_frame(surf, spine_img):
 
 
 def _ago(s):
-    if s is None:
+    if s is None or s < 60:
         return ""
     m = int(s // 60)
     return f" {m}m" if m < 120 else f" {m // 60}h"
