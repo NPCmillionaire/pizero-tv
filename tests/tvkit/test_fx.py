@@ -35,3 +35,9 @@ def test_glow_is_bigger_than_text():
     img = fx.glow_text("HI", "sans", 30, (0, 255, 0))
     plain = pygame.font.Font(None, 30)
     assert img.get_width() > 10 and img.get_flags() & pygame.SRCALPHA
+
+
+def test_crawl_item_runs_stay_together():
+    one = fx.Crawl([[("A", (255, 0, 0)), ("B", (0, 255, 0))]], "sans", 20, (255, 255, 255), sep=" ")
+    two = fx.Crawl(["A", "B"], "sans", 20, (255, 255, 255), sep=" ")
+    assert one.strip.get_width() < two.strip.get_width()

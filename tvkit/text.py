@@ -29,6 +29,18 @@ FILES = {
     "list": "BarlowCondensed-Medium.ttf", "list-700": "BarlowCondensed-Bold.ttf",   # GUIDE: listings
 }
 OVERFLOWS = []   # test hook: (text, rect) for anything drawn past the surface edge
+CHECK_GLYPHS = False   # test hook: when True, record characters a font can't draw in MISSING
+MISSING = []
+_CMAPS = {}
+
+
+def _check(role, s):
+    if role not in _CMAPS:
+        from fontTools.ttLib import TTFont   # dev/test dependency only
+        _CMAPS[role] = set(TTFont(os.path.join(FONT_DIR, FILES[role])).getBestCmap())
+    bad = {c for c in s if ord(c) not in _CMAPS[role] and not c.isspace()}
+    if bad:
+        MISSING.append((role, s, "".join(sorted(bad))))
 
 
 @lru_cache(maxsize=None)
@@ -62,6 +74,8 @@ def clear_cache():
 
 
 def render(s, role="sans", size=20, color=theme.BONE, max_w=None):
+    if CHECK_GLYPHS:
+        _check(role, s)
     if max_w is not None:
         s = fit(font(role, size), s, max_w)
     return _render(role, size, s, tuple(color))

@@ -39,12 +39,15 @@ def render(cls, fakes, cfg=PLACE):
 
 @pytest.mark.parametrize("name", REG.names())
 @pytest.mark.parametrize("mode", MODES)
-def test_render_smoke(name, mode):
+def test_render_smoke(name, mode, monkeypatch):
+    monkeypatch.setattr(text, "CHECK_GLYPHS", True)
     text.OVERFLOWS.clear()
+    text.MISSING.clear()
     fakes = fixtures(name)
     fakes["__mode__"] = mode
     render(REG.get(name), fakes)
     assert text.OVERFLOWS == []
+    assert text.MISSING == []          # no tofu boxes: every character exists in the font that draws it
 
 
 @pytest.mark.parametrize("name", REG.names())

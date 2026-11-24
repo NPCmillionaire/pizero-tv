@@ -36,6 +36,8 @@ def scanlines(surf, strength=60, every=2):
 
 @lru_cache(maxsize=64)
 def _glow(s, role, size, color, radius):
+    if text.CHECK_GLYPHS:
+        text._check(role, s)
     core = text.font(role, size).render(s, True, color)
     w, h = core.get_width() + radius * 4, core.get_height() + radius * 4
     halo = pygame.Surface((w, h), pygame.SRCALPHA)
@@ -61,11 +63,12 @@ class Crawl:
         self.speed = speed
         f = text.font(role, size)
         parts = []
-        for it in items:
-            if isinstance(it, tuple):
-                parts.append(f.render(it[0], True, it[1]))
-            else:
-                parts.append(f.render(it, True, color))
+        for it in items:                     # an item is text, (text, color), or a list of (text, color) runs
+            runs = it if isinstance(it, list) else [it if isinstance(it, tuple) else (it, color)]
+            for run, col in runs:
+                if text.CHECK_GLYPHS:
+                    text._check(role, run)
+                parts.append(f.render(run, True, col))
             parts.append(f.render(sep, True, sep_color or color))
         if not parts:
             self.strip = None
