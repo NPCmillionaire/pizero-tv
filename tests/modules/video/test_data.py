@@ -186,3 +186,36 @@ def test_mpv_args_turn_on_english_captions():
     a = data.mpv_args(e, 3, "X", ytdl="y", input_conf="c")
     assert "--sub-visibility=yes" in a and "--slang=en,en-US,en-GB,en-orig" in a
     assert "--ytdl-raw-options-append=write-auto-subs=" in a and "--ytdl-raw-options-append=sub-langs=en.*" in a
+
+
+def test_orphan_cleanup_pattern_is_not_read_as_a_pkill_option():
+    from tvkit import ORPHAN_MPV
+    assert not ORPHAN_MPV.startswith("-")
+
+
+def test_video_channels_are_not_resumed():
+    import modules.video as video
+    assert all(m.resume is False for m in video.MODULES)
+
+
+def test_mpv_is_first_to_go_when_memory_runs_out(monkeypatch, tmp_path):
+    import subprocess
+    import modules.video as video
+    adj = tmp_path / "oom_score_adj"
+
+    class P:
+        pid = 777
+    monkeypatch.setattr(subprocess, "Popen", lambda *a, **k: P())
+    monkeypatch.setattr(video, "oom_adj_path", lambda pid: str(adj))
+    m = video.MODULES[0]()
+    m.start(_ctx({"listing": CP}))
+    m._launch(data.parse_listing({"entries": CP["entries"][:1]})[0])
+    assert adj.read_text().strip() == "1000"
+    m.proc = None
+    m.stop()
+
+
+def test_mpv_args_cap_memory():
+    e = data.parse_listing({"entries": CP["entries"][:1]})[0]
+    a = data.mpv_args(e, 3, "X", ytdl="y", input_conf="c")
+    assert "--demuxer-max-back-bytes=2MiB" in a and "--demuxer-max-bytes=16MiB" in a

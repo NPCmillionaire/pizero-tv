@@ -44,7 +44,7 @@ def clean_title(t):
 def mpv_args(entry, channel_no, title, ytdl, input_conf):
     return ["mpv", "--fs", "--really-quiet", "--no-terminal", "--hwdec=v4l2m2m-copy", "--vo=gpu",
             "--gpu-context=wayland", "--profile=fast", "--framedrop=vo", "--video-sync=audio",
-            "--demuxer-max-bytes=24MiB", f"--ytdl-format={FORMAT}",
+            "--demuxer-max-bytes=16MiB", "--demuxer-max-back-bytes=2MiB", f"--ytdl-format={FORMAT}",
             # captions: the video's English subtitles, or YouTube's automatic ones
             "--sub-visibility=yes", "--slang=en,en-US,en-GB,en-orig", "--sub-font-size=46", "--sub-border-size=3",
             "--ytdl-raw-options-append=write-auto-subs=", "--ytdl-raw-options-append=sub-langs=en.*",

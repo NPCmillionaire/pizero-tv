@@ -14,6 +14,10 @@ X0 = 190
 DEFAULT_SHORTS = ["@veritasium", "@minutephysics", "@SteveMould", "@TheActionLab", "@NileRed"]   # all have Shorts tabs
 
 
+def oom_adj_path(pid):
+    return f"/proc/{pid}/oom_score_adj"
+
+
 def ytdlp_path():
     local = os.path.expanduser("~/.local/bin/yt-dlp")
     return local if os.access(local, os.X_OK) else shutil.which("yt-dlp")
@@ -45,6 +49,7 @@ class VideoChannel(Module):
     urls = ()
     order = 100
     fps = 8
+    resume = False
 
     def start(self, ctx):
         super().start(ctx)
@@ -106,6 +111,11 @@ class VideoChannel(Module):
             self.proc = subprocess.Popen(data.mpv_args(e, chan or 0, self.title, ytdlp_path() or "yt-dlp",
                                                        self.input_conf),
                                          stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, start_new_session=True)
+            try:                                # if memory runs out, the kernel kills mpv, not the host
+                with open(oom_adj_path(self.proc.pid), "w") as fh:
+                    fh.write("1000")
+            except OSError:
+                pass
             return self.proc
 
     @property

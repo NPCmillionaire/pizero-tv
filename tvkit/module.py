@@ -24,6 +24,7 @@ class Module:
     aliases = ()
     order = 100           # position in the default cycle
     fps = 24              # frame rate while draw_live reports motion
+    resume = True         # False: never reopened by a restarted host (video players)
 
     def __init__(self):
         self.sources = []

@@ -119,6 +119,10 @@ class Host:
         if not isinstance(st, dict):
             st = {}
         mode, name = st.get("mode"), st.get("module")
+        cls = self.registry.get(name) if name else None
+        if cls is not None and not getattr(cls, "resume", True):
+            # the last host may have died under this channel (a video player running out of memory)
+            name = None if mode == "cycle" else self.registry.channels()[0].name
         if mode == "standby":
             return self.standby()
         if mode == "show" and self.registry.get(name):

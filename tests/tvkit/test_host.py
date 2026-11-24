@@ -327,3 +327,17 @@ def test_static_frames_differ_over_time():
     scenes.static(a, 0.00)
     scenes.static(b, 0.05)
     assert pygame.image.tobytes(a, "RGB")[:200000] != pygame.image.tobytes(b, "RGB")[:200000]
+
+
+def test_resume_never_restarts_a_video_channel(tmp_path):
+    # a host killed while mpv played (out of memory) must not relaunch mpv on restart and loop
+    a, v = mod("aa"), mod("vid", resume=False, order=99)
+    sp = tmp_path / "state.json"
+    sp.write_text(json.dumps({"mode": "show", "module": "vid"}))
+    h, _ = make(a, v, state_path=str(sp))
+    h.resume()
+    assert h.current.name != "vid"
+    sp.write_text(json.dumps({"mode": "cycle", "module": "vid", "cycle_seconds": 60, "cycle_names": None}))
+    h2, _ = make(a, v, state_path=str(sp))
+    h2.resume()
+    assert h2.mode == "cycle" and h2.current.name != "vid"
