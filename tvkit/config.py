@@ -33,15 +33,28 @@ def load(path=None):
     except Exception as e:
         print(f"config: ignoring {path}: {e}", file=sys.stderr)
         return Config()
-    p = d.get("place") or {}
+    def sec(name):
+        v = d.get(name)
+        return v if isinstance(v, dict) else {}
+
+    p = sec("place")
     place = None
-    if "lat" in p and "lon" in p:
-        place = Place(str(p.get("name", "Here")), float(p["lat"]), float(p["lon"]), p.get("timezone"))
+    try:
+        if "lat" in p and "lon" in p:
+            place = Place(str(p.get("name", "Here")), float(p["lat"]), float(p["lon"]), p.get("timezone"))
+    except (TypeError, ValueError) as e:
+        print(f"config: ignoring [place]: {e}", file=sys.stderr)
+    try:
+        seconds = max(10, int(sec("cycle").get("seconds", 90)))
+    except (TypeError, ValueError):
+        print("config: [cycle] seconds must be a number; using 90", file=sys.stderr)
+        seconds = 90
+    mods = sec("cycle").get("modules")
     return Config(
         place=place,
-        units_temp=str((d.get("units") or {}).get("temp", "F")).upper(),
-        lan_subnet=(d.get("lan") or {}).get("subnet"),
-        cycle_seconds=int((d.get("cycle") or {}).get("seconds", 90)),
-        cycle_modules=(d.get("cycle") or {}).get("modules"),
+        units_temp=str(sec("units").get("temp", "F")).upper(),
+        lan_subnet=sec("lan").get("subnet") if isinstance(sec("lan").get("subnet"), str) else None,
+        cycle_seconds=seconds,
+        cycle_modules=[str(m) for m in mods] if isinstance(mods, list) else None,
         raw=d,
     )

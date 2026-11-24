@@ -1,5 +1,5 @@
 """The Module API every screen implements. See the suite design doc."""
-import os
+import os, time
 from dataclasses import dataclass
 
 from . import theme
@@ -36,8 +36,12 @@ class Module:
         self.ctx = ctx
 
     def stop(self):
+        """Signal every source, then give them all one short shared deadline (threads are daemons)."""
         for s in self.sources:
-            s.stop()
+            s.signal_stop()
+        deadline = time.monotonic() + 0.5
+        for s in self.sources:
+            s.stop(timeout=max(0.0, deadline - time.monotonic()))
         self.sources = []
 
     def source(self, name, fetch, interval, parse=lambda x: x, cache=True):

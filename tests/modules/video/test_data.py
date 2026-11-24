@@ -112,3 +112,62 @@ def test_config_adds_channels(tmp_path, monkeypatch):
     assert [m.name for m in v.MODULES] == ["computerphile", "shorts", "numberphile"]
     monkeypatch.undo()
     importlib.reload(video)
+
+
+def test_stop_during_launch_still_kills_player(monkeypatch):
+    import os, subprocess, threading, time
+    import modules.video as video
+    killed = []
+
+    class SlowProc:
+        pid = 777
+
+        def poll(self):
+            return None
+
+        def wait(self, timeout=None):
+            return 0
+
+    def slow_popen(*a, **k):
+        time.sleep(0.2)
+        return SlowProc()
+    monkeypatch.setattr(subprocess, "Popen", slow_popen)
+    monkeypatch.setattr(os, "killpg", lambda pid, sig: killed.append(pid))
+    m = video.MODULES[0]()
+    m.start(_ctx({"listing": CP}))
+    e = m.listing.value[0]
+    t = threading.Thread(target=m._launch, args=(e,))
+    t.start()
+    time.sleep(0.05)
+    m.stop()
+    t.join()
+    assert 777 in killed
+
+
+def test_launch_after_stop_does_nothing(monkeypatch):
+    import subprocess
+    import modules.video as video
+    monkeypatch.setattr(subprocess, "Popen", lambda *a, **k: (_ for _ in ()).throw(AssertionError("launched")))
+    m = video.MODULES[0]()
+    m.start(_ctx({"listing": CP}))
+    m.stop()
+    assert m._launch(m.listing.value[0]) is None
+
+
+def test_missing_ytdlp_says_so(monkeypatch):
+    import shutil
+    import modules.video as video
+    monkeypatch.setattr(shutil, "which", lambda n: "/usr/bin/mpv" if n == "mpv" else None)
+    monkeypatch.setattr(video, "ytdlp_path", lambda: None)
+    m = video.MODULES[0]()
+    m.start(_ctx({"listing": CP}))
+    assert "yt-dlp" in m.problem
+    m.stop()
+
+
+def test_orphan_pattern_matches_our_mpv():
+    import modules.video as video
+    e = data.parse_listing({"entries": CP["entries"][:1]})[0]
+    args = data.mpv_args(e, 14, "X", ytdl="y", input_conf="/home/u/.cache/pizero-tv/computerphile/mpv-input.conf")
+    import re
+    assert re.search(video.ORPHAN_PATTERN, " ".join(args))

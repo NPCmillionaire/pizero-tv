@@ -25,6 +25,8 @@ if [ -L ~/.local/bin/tv ] && [ "$(readlink ~/.local/bin/tv)" != "$HOME/pizero-tv
   done
 fi
 ln -sfn ~/pizero-tv/bin/tv ~/.local/bin/tv
+command -v mpv >/dev/null || echo "note: video channels need mpv (sudo apt install -y mpv)"
+[ -x ~/.local/bin/yt-dlp ] || command -v yt-dlp >/dev/null || echo "note: video channels need yt-dlp in ~/.local/bin"
 cp ~/pizero-tv/autostart/pizero-tv.desktop ~/.config/autostart/
 [ -f ~/.config/pizero-tv/config.toml ] || cp ~/pizero-tv/config.example.toml ~/.config/pizero-tv/config.toml
 [ -x ~/tv/tv ] && ~/tv/tv stop >/dev/null 2>&1
@@ -39,3 +41,4 @@ echo "install finished $(date)"
 EOS
 setsid nohup bash /tmp/pizero-tv-install.sh > /tmp/pizero-tv-install.log 2>&1 < /dev/null &'
 echo "Deployed to $HOST. Install log on the Pi: /tmp/pizero-tv-install.log"
+ssh -o ConnectTimeout=10 "$HOST" 'command -v mpv >/dev/null || echo "Video channels need mpv: sudo apt install -y mpv"; [ -x ~/.local/bin/yt-dlp ] || command -v yt-dlp >/dev/null || echo "Video channels need a current yt-dlp in ~/.local/bin (see README)"' || true

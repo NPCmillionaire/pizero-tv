@@ -59,3 +59,13 @@ def test_cli_up_down_numbers(reg):
 
 def test_cli_digit_passthrough(reg):
     assert cli.to_command(["digit", "4"], reg) == "digit 4"
+
+
+def test_cli_does_not_import_modules_for_remote_keys(monkeypatch):
+    from tvkit import registry
+    monkeypatch.setattr(registry, "discover", lambda *a, **k: (_ for _ in ()).throw(AssertionError("imported")))
+    sent = []
+    monkeypatch.setattr(control, "send", lambda p, l, timeout=10: sent.append(l) or "ok")
+    for args in (["up"], ["digit", "3"], ["7"], ["weather"], ["next"]):
+        assert cli.main(args) == 0
+    assert sent == ["up", "digit 3", "ch 7", "show weather", "next"]

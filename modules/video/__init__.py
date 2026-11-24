@@ -1,9 +1,7 @@
 """Video channels: YouTube played full screen by mpv. COMPUTERPHILE, SHORTS, and any [[video]] in config."""
 import json, os, shutil, subprocess, sys, threading, time
 
-import pygame
-
-from tvkit import config as config_mod, text, theme
+from tvkit import ORPHAN_MPV, config as config_mod, text, theme
 from tvkit.module import Module
 
 from . import data
@@ -11,6 +9,7 @@ from . import data
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 TV = os.path.join(ROOT, "bin", "tv")
 LISTING_S = 6 * 3600
+ORPHAN_PATTERN = ORPHAN_MPV
 X0 = 190
 DEFAULT_SHORTS = ["@veritasium", "@SmarterEveryDay", "@minutephysics", "@TomScottGo", "@standupmaths"]
 
@@ -20,16 +19,29 @@ def ytdlp_path():
     return local if os.access(local, os.X_OK) else shutil.which("yt-dlp")
 
 
-def fetch_listing(urls, per=40):
+def fetch_listing(urls, stop=None, per=40):
+    """List uploads for each URL with yt-dlp. Stops (and kills yt-dlp) as soon as `stop` is set."""
     ytdl = ytdlp_path()
     if not ytdl:
         raise RuntimeError("yt-dlp is not installed")
     entries = []
     for u in urls:
-        out = subprocess.run([ytdl, "--flat-playlist", "-J", "--playlist-end", str(per), u],
-                             capture_output=True, text=True, timeout=120)
-        if out.returncode == 0:
-            entries += json.loads(out.stdout).get("entries") or []
+        if stop is not None and stop.is_set():
+            raise RuntimeError("stopped")
+        p = subprocess.Popen([ytdl, "--flat-playlist", "-J", "--playlist-end", str(per), u],
+                             stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True)
+        deadline = time.monotonic() + 120
+        while True:
+            try:
+                out, _ = p.communicate(timeout=1)
+                break
+            except subprocess.TimeoutExpired:
+                if (stop is not None and stop.is_set()) or time.monotonic() > deadline:
+                    p.kill()
+                    p.communicate()
+                    raise RuntimeError("listing interrupted")
+        if p.returncode == 0:
+            entries += json.loads(out).get("entries") or []
     return {"entries": [{k: e.get(k) for k in ("id", "title", "duration", "url")} for e in entries if e]}
 
 
@@ -41,11 +53,16 @@ class VideoChannel(Module):
     def start(self, ctx):
         super().start(ctx)
         self.recent, self.now_playing, self.problem = [], None, None
-        self.proc, self._stop = None, threading.Event()
-        self.input_conf = os.path.join(ctx.cache_dir or "/tmp", "mpv-input.conf")
-        self.listing = self.source("listing", lambda: fetch_listing(self.urls), LISTING_S, parse=data.parse_listing)
+        self.proc, self._stop, self._lock = None, threading.Event(), threading.Lock()
+        self.input_conf = os.path.join(ctx.cache_dir or "/tmp/pizero-tv", "mpv-input.conf")
+        self.listing = self.source("listing", lambda: fetch_listing(self.urls, self._stop), LISTING_S,
+                                   parse=data.parse_listing)
         if not shutil.which("mpv"):
             self.problem = "This channel needs mpv. Install it with: sudo apt install mpv"
+            return
+        if not ytdlp_path():
+            self.problem = ("This channel needs a current yt-dlp in ~/.local/bin or on the PATH. "
+                            "See the README's video section.")
             return
         if ctx.fakes is not None:
             return                                   # tests: never launch a real player
@@ -66,13 +83,11 @@ class VideoChannel(Module):
             e = data.pick(entries, self.recent)
             self.recent = (self.recent + [e.id])[-10:]
             self.now_playing, self.dirty = e, True
-            chan = self.ctx.registry.number(self.name) if self.ctx.registry else 0
             try:
-                self.proc = subprocess.Popen(data.mpv_args(e, chan or 0, self.title, ytdlp_path() or "yt-dlp",
-                                                           self.input_conf),
-                                             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
-                                             start_new_session=True)
-                code = self.proc.wait()
+                proc = self._launch(e)
+                if proc is None:
+                    break
+                code = proc.wait()
             except Exception as ex:
                 code, self.problem = -1, f"mpv couldn't start: {ex}"
             self.proc = None
@@ -86,6 +101,17 @@ class VideoChannel(Module):
             else:
                 self.problem = None
 
+    def _launch(self, e):
+        """Start mpv for entry e, unless the channel is already stopping (checked under the same lock)."""
+        chan = self.ctx.registry.number(self.name) if self.ctx.registry else 0
+        with self._lock:
+            if self._stop.is_set():
+                return None
+            self.proc = subprocess.Popen(data.mpv_args(e, chan or 0, self.title, ytdlp_path() or "yt-dlp",
+                                                       self.input_conf),
+                                         stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, start_new_session=True)
+            return self.proc
+
     @property
     def external(self):
         p = self.proc
@@ -93,7 +119,8 @@ class VideoChannel(Module):
 
     def stop(self):
         self._stop.set()
-        p = self.proc
+        with self._lock:                       # a launch in progress finishes assigning proc first
+            p = self.proc
         if p is not None and p.poll() is None:
             try:
                 os.killpg(p.pid, 15)            # mpv and its yt-dlp helper
@@ -102,7 +129,10 @@ class VideoChannel(Module):
             try:
                 p.wait(3)
             except Exception:
-                p.kill()
+                try:
+                    os.killpg(p.pid, 9)
+                except Exception:
+                    p.kill()
         super().stop()
 
     @property

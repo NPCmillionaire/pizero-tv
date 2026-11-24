@@ -63,6 +63,9 @@ class Source:
         return True
 
     def _run(self):
+        age = self.age_s
+        if self._from_cache and age is not None and age < self.interval:
+            self._stop.wait(self.interval - age)      # cached payload is still fresh: don't refetch yet
         while not self._stop.is_set():
             self.poll_once()
             self._stop.wait(self.interval)
@@ -72,6 +75,9 @@ class Source:
             self._thread = threading.Thread(target=self._run, name=f"source:{self.name}", daemon=True)
             self._thread.start()
         return self
+
+    def signal_stop(self):
+        self._stop.set()
 
     def stop(self, timeout=2.0):
         self._stop.set()

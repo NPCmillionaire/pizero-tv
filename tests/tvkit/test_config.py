@@ -28,3 +28,16 @@ def test_example_config_parses():
     import os
     c = config.load(os.path.join(os.path.dirname(__file__), "..", "..", "config.example.toml"))
     assert c.place.name == "San Francisco"
+
+
+def test_bad_values_fall_back(tmp_path):
+    p = tmp_path / "c.toml"
+    p.write_text('[place]\nname = "x"\nlat = "37.7N"\nlon = 1\n[cycle]\nseconds = "90s"\n')
+    c = config.load(str(p))
+    assert c.place is None and c.cycle_seconds == 90
+
+
+def test_cycle_seconds_clamped(tmp_path):
+    p = tmp_path / "c.toml"
+    p.write_text('[cycle]\nseconds = -5\n')
+    assert config.load(str(p)).cycle_seconds == 10

@@ -299,3 +299,12 @@ def test_switch_clears_render_cache():
     assert text._render.cache_info().currsize >= 50
     h.show("bbb")
     assert text._render.cache_info().currsize == 0
+
+
+def test_state_not_a_dict_falls_back(tmp_path):
+    a = mod("aa")
+    sp = tmp_path / "state.json"
+    sp.write_text("null")
+    h, _ = make(a, state_path=str(sp))
+    h.resume()
+    assert h.mode == "cycle" and h.current.name == "aa"

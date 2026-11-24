@@ -116,6 +116,8 @@ class Host:
                 st = json.load(open(self.state_path))
             except Exception:
                 st = {}
+        if not isinstance(st, dict):
+            st = {}
         mode, name = st.get("mode"), st.get("module")
         if mode == "standby":
             return self.standby()

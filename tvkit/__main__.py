@@ -24,6 +24,10 @@ def main(argv=None):
 
     root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     sys.path.insert(0, root)
+    if not args.only:
+        import subprocess
+        from . import ORPHAN_MPV
+        subprocess.run(["pkill", "-f", ORPHAN_MPV], check=False)   # players left by a previous host
     pygame.init()
     flags = pygame.SCALED | pygame.DOUBLEBUF
     if os.environ.get("TV_WINDOWED") != "1":

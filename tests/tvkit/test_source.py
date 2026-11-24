@@ -74,3 +74,30 @@ def test_source_stop_joins_thread():
     s.start()
     s.stop()
     assert not any(t.name == "source:s" and t.is_alive() for t in threading.enumerate())
+
+
+def test_fresh_cache_delays_first_fetch(tmp_path):
+    import time as _t
+    calls = []
+    s, c = make(lambda: calls.append(1) or {"a": 1}, tmp_path)
+    s.poll_once()
+    calls.clear()
+    s2 = Source("s", lambda: calls.append(1) or {"a": 1}, interval=60, cache_dir=str(tmp_path), clock=c, wall=c)
+    s2.start()
+    _t.sleep(0.2)
+    s2.stop()
+    assert calls == [] and s2.value == {"a": 1}
+
+
+def test_module_stop_does_not_wait_for_slow_fetch():
+    import time as _t
+    from tvkit import config
+    from tvkit.module import Ctx, Module
+    m = Module()
+    m.start(Ctx(config.Config(), None))
+    for i in range(4):
+        m.source(f"slow{i}", lambda: _t.sleep(3) or 1, 60, cache=False)
+    _t.sleep(0.05)
+    t0 = _t.time()
+    m.stop()
+    assert _t.time() - t0 < 1.0

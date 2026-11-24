@@ -1,6 +1,8 @@
 """`tv` — control the pizero-tv display, here or on another Pi (-H host)."""
 import json, os, shlex, subprocess, sys
 
+os.environ.setdefault("PYGAME_HIDE_SUPPORT_PROMPT", "1")
+
 from . import control
 
 HELP = """usage: tv [-H HOST] <command>
@@ -28,7 +30,8 @@ class Usage(Exception):
     pass
 
 
-def to_command(args, reg):
+def to_command(args, reg=None):
+    """Turn CLI args into a host command. With reg, module names are checked here; without, the host checks."""
     if not args or args[0] == "status":
         return "status"
     cmd, rest = args[0], args[1:]
@@ -52,6 +55,8 @@ def to_command(args, reg):
 
 
 def _module(name, reg):
+    if reg is None:
+        return name
     cls = reg.get(name)
     if cls is None:
         raise Usage(f"No module called {name!r}. {_choices(reg)}")
@@ -121,11 +126,11 @@ def main(argv=None, reg=None):
             return 0
         except control.NotRunning:
             return _start()
-    if reg is None:
-        sys.path.insert(0, ROOT)
-        from . import registry
-        reg = registry.discover()
     if args[:1] == ["list"]:
+        if reg is None:
+            sys.path.insert(0, ROOT)
+            from . import registry
+            reg = registry.discover()
         for i, c in enumerate(reg.channels()):
             alias = f"  (also: {', '.join(c.aliases)})" if c.aliases else ""
             print(f"{i:02d}  {c.name:<14} {c.blurb}{alias}")
@@ -141,7 +146,8 @@ def main(argv=None, reg=None):
         print("tvd isn't running. Start it with: tv start", file=sys.stderr)
         return 2
     if reply.startswith("error"):
-        print(reply, file=sys.stderr)
+        hint = " (see tv list)" if "unknown module" in reply else ""
+        print(reply + hint, file=sys.stderr)
         return 1
     if line == "status":
         print(_pretty(reply))
