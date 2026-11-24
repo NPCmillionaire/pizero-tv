@@ -26,10 +26,10 @@ def render(cls, fakes, cfg=PLACE):
     m.start(Ctx(cfg, None, fakes=fakes))
     surf = pygame.Surface((1280, 720))
     try:
-        chrome.draw_frame(surf, chrome.spine(m.title, m.key))
+        m.draw_frame(surf)
         m.update(0.0)
         m.draw_static(surf)
-        chrome.draw_footer(surf, *m.status())
+        chrome.draw_footer(surf, *m.status(), color=m.footer_color)
         for t in (0.05, 0.5, 1.0, 2.5):
             m.draw_live(surf, t)
     finally:

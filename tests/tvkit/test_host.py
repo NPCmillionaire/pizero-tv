@@ -341,3 +341,16 @@ def test_resume_never_restarts_a_video_channel(tmp_path):
     h2, _ = make(a, v, state_path=str(sp))
     h2.resume()
     assert h2.mode == "cycle" and h2.current.name != "vid"
+
+
+def test_module_draws_its_own_frame():
+    class Own(Module):
+        name, title, blurb = "own", "OWN", "own look"
+        footer_color = (1, 2, 3)
+
+        def draw_frame(self, surf):
+            surf.fill((200, 0, 0))
+    h, c = make(Own)
+    h.show("own")
+    run(h, c, 1.0)
+    assert tuple(h.screen.get_at((10, 360)))[:3] == (200, 0, 0)     # no spine: the channel owns the screen

@@ -24,6 +24,14 @@ STATIC = {
     "IBMPlexMono-Regular.ttf": "ibmplexmono/",
     "IBMPlexMono-Medium.ttf": "ibmplexmono/",
 }
+# channel looks (each channel has its own station type)
+EXTRA = {
+    "Anton-Regular.ttf": "anton/", "B612Mono-Regular.ttf": "b612mono/", "B612Mono-Bold.ttf": "b612mono/",
+    "BarlowCondensed-Medium.ttf": "barlowcondensed/", "BarlowCondensed-Bold.ttf": "barlowcondensed/",
+    "Bungee-Regular.ttf": "bungee/", "SairaStencilOne-Regular.ttf": "sairastencilone/",
+    "ShareTechMono-Regular.ttf": "sharetechmono/", "VT323-Regular.ttf": "vt323/",
+}
+VARIABLE = {"jost/Jost%5Bwght%5D.ttf": ("Jost", (500, 700)), "oxanium/Oxanium%5Bwght%5D.ttf": ("Oxanium", (500, 700))}
 BIG = "bigshouldersdisplay/BigShouldersDisplay%5Bwght%5D.ttf"
 KANA = ("U+0020-007E,U+30A0-30FF,U+FF66-FF9D")
 
@@ -44,6 +52,14 @@ def main(droid):
         f.save(os.path.join(OUT, f"BigShouldersDisplay-{w}.ttf"))
     open(os.path.join(OUT, "LICENSE-OFL.txt"), "wb").write(get("bigshouldersdisplay/OFL.txt"))
     open(os.path.join(OUT, "LICENSE-OFL-IBMPlex.txt"), "wb").write(get("ibmplexsanscondensed/OFL.txt"))
+    for name, d in EXTRA.items():
+        open(os.path.join(OUT, name), "wb").write(get(d + name))
+    for path, (fam, weights) in VARIABLE.items():
+        var = get(path)
+        for w in weights:
+            instancer.instantiateVariableFont(TTFont(io.BytesIO(var)), {"wght": w}).save(os.path.join(OUT, f"{fam}-{w}.ttf"))
+    for d in {*EXTRA.values(), *(p.split("/")[0] + "/" for p in VARIABLE)}:
+        open(os.path.join(OUT, f"LICENSE-OFL-{d.strip('/')}.txt"), "wb").write(get(d + "OFL.txt"))
     opts = subset.Options()
     opts.layout_features = ["*"]
     f = TTFont(droid)

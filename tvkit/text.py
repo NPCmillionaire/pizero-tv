@@ -17,6 +17,16 @@ FILES = {
     "mono": "IBMPlexMono-Regular.ttf",
     "mono-500": "IBMPlexMono-Medium.ttf",
     "kana": "KanaSubset.ttf",
+    # channel looks
+    "geo": "Jost-500.ttf", "geo-700": "Jost-700.ttf",                 # WEATHER: local forecast
+    "loud": "Bungee-Regular.ttf",                                     # CRYPTO: late-night trading
+    "stencil": "SairaStencilOne-Regular.ttf",                         # THREATS: war room
+    "scope": "B612Mono-Regular.ttf", "scope-700": "B612Mono-Bold.ttf",   # AIRSPACE: ATC scope
+    "console": "Oxanium-500.ttf", "console-700": "Oxanium-700.ttf",   # ORBIT: mission control
+    "bulletin": "Anton-Regular.ttf",                                  # SIGNAL: breaking news
+    "vga": "VT323-Regular.ttf",                                       # SYSTEM: BIOS
+    "term": "ShareTechMono-Regular.ttf",                              # LAN: sonar
+    "list": "BarlowCondensed-Medium.ttf", "list-700": "BarlowCondensed-Bold.ttf",   # GUIDE: listings
 }
 OVERFLOWS = []   # test hook: (text, rect) for anything drawn past the surface edge
 
@@ -48,6 +58,7 @@ def _render(role, size, s, color):
 def clear_cache():
     """Drop cached text surfaces (big hero numbers add up); the host calls this on every switch."""
     _render.cache_clear()
+    font.cache_clear()
 
 
 def render(s, role="sans", size=20, color=theme.BONE, max_w=None):

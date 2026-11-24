@@ -25,6 +25,7 @@ class Module:
     order = 100           # position in the default cycle
     fps = 24              # frame rate while draw_live reports motion
     resume = True         # False: never reopened by a restarted host (video players)
+    footer_color = None   # station bug color over this channel's background (None: theme default)
 
     def __init__(self):
         self.sources = []
@@ -71,6 +72,11 @@ class Module:
         return s
 
     # host hooks -----------------------------------------------------------
+    def draw_frame(self, surf):
+        """The channel's backdrop, drawn under draw_static. Default: the house spine frame."""
+        from . import chrome
+        chrome.draw_frame(surf, chrome.spine(self.title, self.key))
+
     @property
     def ready(self):
         return all(s.status != "waiting" for s in self.sources)

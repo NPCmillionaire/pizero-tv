@@ -3,7 +3,7 @@ import json, os, sys, time, traceback
 
 import pygame
 
-from . import chrome, scenes, text
+from . import chrome, fx, scenes, text
 from .module import Ctx
 
 STATIC_S, CRASH_S, OSD_S, OSD_FADE, DIGIT_S = 0.6, 10.0, 3.0, 0.5, 1.2
@@ -34,6 +34,7 @@ class Host:
             raise KeyError(name)
         self._stop_current()
         text.clear_cache()
+        fx.clear_cache()
         self.cls, self.mode = cls, mode
         self.phase, self.t_phase = "static", self.clock()
         self.osd_t = self.t_phase
@@ -242,9 +243,9 @@ class Host:
         changed = m.update(now)
         footer = m.status()
         if changed or footer != self._footer:
-            chrome.draw_frame(self.static, chrome.spine(m.title, m.key))
+            m.draw_frame(self.static)
             m.draw_static(self.static)
-            chrome.draw_footer(self.static, *footer)
+            chrome.draw_footer(self.static, *footer, color=m.footer_color)
             self._footer = footer
         self.screen.blit(self.static, (0, 0))
 

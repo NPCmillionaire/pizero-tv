@@ -48,9 +48,9 @@ STATUS_COLOR = {"live": theme.SEAGLASS, "stale": theme.SODIUM, "offline": theme.
                 "waiting": theme.LICHEN}
 
 
-def draw_footer(surf, status, age_s):
+def draw_footer(surf, status, age_s, color=None):
     r = text.draw(surf, "legitbiz.research", (theme.W - 30, theme.H - 14), "sans", 14,
-                  theme.LICHEN, anchor="bottomright")
+                  color or theme.LICHEN, anchor="bottomright")
     if status is None:
         return
     col = STATUS_COLOR.get(status, theme.LICHEN)
