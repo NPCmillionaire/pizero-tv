@@ -95,3 +95,13 @@ def processes(n=6):
 def throttled():
     out = subprocess.run(["vcgencmd", "get_throttled"], capture_output=True, text=True, timeout=5).stdout
     return {"raw": out}
+
+
+def hosts(raw):
+    """[[system.hosts]] from config.toml → [(name, base_url)], skipping malformed entries."""
+    sysc = raw.get("system") if isinstance(raw, dict) else None
+    out = []
+    for h in (sysc.get("hosts") or []) if isinstance(sysc, dict) else []:
+        if isinstance(h, dict) and isinstance(h.get("name"), str) and isinstance(h.get("url"), str):
+            out.append((h["name"], h["url"].rstrip("/")))
+    return out

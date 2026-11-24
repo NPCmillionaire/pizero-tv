@@ -16,3 +16,9 @@ subnet = "192.168.1.0/24"
 [cycle]
 seconds = 90
 # modules = ["weather", "markets", "crypto"]   # default: all of them
+
+# Other machines on the SYSTEM channel. Run tools/install_agent.sh on each one first
+# (it serves read-only stats on port 8765 to private network addresses only).
+# [[system.hosts]]
+# name = "darwin"
+# url = "http://darwin.local:8765"

@@ -51,3 +51,31 @@ def test_uptime_text(secs, txt):
 @pytest.mark.parametrize("b,txt", [(512, "512 B/s"), (2048, "2.0 KB/s"), (3.5 * 1024 * 1024, "3.5 MB/s")])
 def test_human_rate(b, txt):
     assert data.human_rate(b) == txt
+
+
+def test_hosts_from_config():
+    from modules.syshud import data
+    raw = {"system": {"hosts": [{"name": "darwin", "url": "http://darwin.local:8765"}, {"name": "broken"},
+                                {"url": "http://x"}, "junk", {"name": "arch", "url": "http://arch.lan:8765/"}]}}
+    assert data.hosts(raw) == [("darwin", "http://darwin.local:8765"), ("arch", "http://arch.lan:8765")]
+    assert data.hosts({}) == [] and data.hosts({"system": "nope"}) == []
+
+
+def test_render_with_other_machines(monkeypatch):
+    import pygame
+    from tests.modules.test_render_smoke import fixtures
+    from tvkit import config, text
+    from tvkit.module import Ctx
+    from modules.syshud import System
+    monkeypatch.setattr(text, "CHECK_GLYPHS", True)
+    text.OVERFLOWS.clear(); text.MISSING.clear()
+    cfg = config.Config(raw={"system": {"hosts": [{"name": "darwin", "url": "http://d:8765"},
+                                                  {"name": "arch", "url": "http://a:8765"},
+                                                  {"name": "gone", "url": "http://g:8765"}]}})
+    m = System()
+    m.start(Ctx(cfg, None, fakes=fixtures("syshud")))
+    s = pygame.Surface((1280, 720))
+    m.update(0.0); m.draw_frame(s); m.draw_static(s); m.draw_live(s, 1.0)
+    m.stop()
+    assert [p[0] for p in m.panels()] == ["pizero", "darwin", "arch", "gone"]
+    assert text.OVERFLOWS == [] and text.MISSING == []

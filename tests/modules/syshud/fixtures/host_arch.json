@@ -1,0 +1,1 @@
+{"host": "arch", "os": "Linux", "os_release": "6.17.8-arch1-1", "cores": 4, "load": [0.4, 0.5, 0.6], "disk_total": 33285996544, "disk_used": 21474836480, "time": 1795540876.8, "cpu": 6.5, "mem_total": 16651722752, "mem_used": 5100000000, "boot": 1794000000, "model": "Intel(R) Core(TM) i5-6500T CPU @ 2.50GHz", "temp": 32.0, "net_rx": 98765432100, "net_tx": 12345678900}

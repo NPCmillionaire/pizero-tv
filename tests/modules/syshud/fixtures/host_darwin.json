@@ -1,0 +1,1 @@
+{"host": "darwin", "os": "Darwin", "os_release": "27.0.1", "cores": 8, "load": [3.1, 2.8, 2.5], "disk_total": 494384795648, "disk_used": 476232704000, "time": 1795540876.8, "cpu": 26.1, "mem_total": 17179869184, "mem_used": 12846923776, "boot": 1795291152, "model": "Apple M1 Pro", "temp": null, "net_rx": 22173496359, "net_tx": 15016697905}
