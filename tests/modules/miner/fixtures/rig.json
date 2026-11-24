@@ -1,0 +1,76 @@
+{
+    "id": "2b86707862010f72",
+    "worker_id": "70806757816a",
+    "uptime": 79,
+    "restricted": true,
+    "resources": {
+        "memory": {
+            "free": 7998816256,
+            "total": 16640286720,
+            "resident_set_memory": 16973824
+        },
+        "load_average": [1.82, 0.74, 0.35],
+        "hardware_concurrency": 4
+    },
+    "features": ["api", "asm", "http", "hwloc", "tls"],
+    "results": {
+        "diff_current": 56680,
+        "shares_good": 7,
+        "shares_total": 7,
+        "avg_time": 7,
+        "avg_time_ms": 7630,
+        "hashes_total": 163360,
+        "best": [80759016, 277716, 39742, 17519, 15296, 14781, 10437, 0, 0, 0]
+    },
+    "algo": "rx/0",
+    "connection": {
+        "pool": "gulf.moneroocean.stream:10001",
+        "ip": "205.172.58.170",
+        "uptime": 53,
+        "uptime_ms": 53414,
+        "ping": 92,
+        "failures": 0,
+        "tls": null,
+        "tls-fingerprint": null,
+        "algo": "rx/0",
+        "diff": 56680,
+        "accepted": 7,
+        "rejected": 0,
+        "avg_time": 7,
+        "avg_time_ms": 7630,
+        "hashes_total": 163360
+    },
+    "version": "6.26.0",
+    "kind": "miner",
+    "ua": "XMRig/6.26.0 (Linux x86_64) libuv/1.49.2 gcc/14.2.0",
+    "cpu": {
+        "brand": "Intel(R) Core(TM) i5-6500 CPU @ 3.20GHz",
+        "family": 6,
+        "model": 94,
+        "stepping": 3,
+        "proc_info": 329443,
+        "aes": true,
+        "avx2": true,
+        "x64": true,
+        "64_bit": true,
+        "l2": 1048576,
+        "l3": 6291456,
+        "cores": 4,
+        "threads": 4,
+        "packages": 1,
+        "nodes": 1,
+        "backend": "hwloc/2.11.2",
+        "msr": "intel",
+        "assembly": "intel",
+        "arch": "x86_64",
+        "flags": ["aes", "avx", "avx2", "bmi2", "osxsave", "pdpe1gb", "sse2", "ssse3", "sse4.1", "popcnt"]
+    },
+    "donate_level": 1,
+    "paused": false,
+    "algorithms": ["cn/1", "cn/2", "cn/r", "cn/fast", "cn/half", "cn/xao", "cn/rto", "cn/rwz", "cn/zls", "cn/double", "cn/ccx", "cn-lite/1", "cn-heavy/0", "cn-heavy/tube", "cn-heavy/xhv", "cn-pico", "cn-pico/tlo", "cn/upx2", "rx/0", "rx/2", "rx/wow", "rx/arq", "rx/graft", "rx/sfx", "rx/yada", "argon2/chukwa", "argon2/chukwav2", "argon2/ninja", "ghostrider"],
+    "hashrate": {
+        "total": [1338.34, null, null],
+        "highest": 1345.95
+    },
+    "hugepages": [1171, 1171]
+}

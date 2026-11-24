@@ -22,3 +22,10 @@ seconds = 90
 # [[system.hosts]]
 # name = "darwin"
 # url = "http://darwin.local:8765"
+
+# MINER: an XMRig rig's HTTP API (enable "http" in its config, restricted, with an
+# access-token) and your MoneroOcean wallet for the pool's side.
+# [miner]
+# url = "http://arch.lan:8081"
+# token = "the access-token from the rig's config"
+# wallet = "4..."
