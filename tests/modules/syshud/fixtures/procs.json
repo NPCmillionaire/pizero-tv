@@ -1,0 +1,1 @@
+[{"name": "python3", "cpu": 24.6, "rss": 72261632}, {"name": "python3", "cpu": 10.2, "rss": 13193216}, {"name": "pipewire-pulse", "cpu": 9.9, "rss": 5582848}, {"name": "kswapd0", "cpu": 9.6, "rss": 0}, {"name": "pipewire", "cpu": 8.7, "rss": 1994752}, {"name": "labwc", "cpu": 1.7, "rss": 1937408}]

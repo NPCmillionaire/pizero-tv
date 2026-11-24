@@ -1,0 +1,18 @@
+# Copy to ~/.config/pizero-tv/config.toml on the Pi. This file stays out of git
+# on the Pi side; the example uses San Francisco so nothing personal is published.
+
+[place]                      # weather, flights
+name = "San Francisco"
+lat = 37.7749
+lon = -122.4194
+timezone = "America/Los_Angeles"
+
+[units]
+temp = "F"                   # or "C"
+
+[lan]                        # lanradar ping sweep
+subnet = "192.168.1.0/24"
+
+[cycle]
+seconds = 90
+# modules = ["weather", "markets", "crypto"]   # default: all of them

@@ -1,0 +1,6 @@
+[{"ip": "192.168.1.1", "mac": "94:83:c4:00:00:01", "state": "REACHABLE", "name": "router.lan", "rtt_ms": 2.1},
+ {"ip": "192.168.1.20", "mac": "b8:27:eb:00:00:20", "state": "REACHABLE", "name": "pi.lan", "rtt_ms": 4.8},
+ {"ip": "192.168.1.31", "mac": "3c:2e:f9:00:00:31", "state": "STALE", "name": null, "rtt_ms": 31.0},
+ {"ip": "192.168.1.44", "mac": "da:a1:19:00:00:44", "state": "REACHABLE", "name": "phone.lan", "rtt_ms": 88.4},
+ {"ip": "192.168.1.52", "mac": "f0:d5:bf:00:00:52", "state": "DELAY", "name": "laptop.lan", "rtt_ms": null},
+ {"ip": "192.168.1.60", "mac": "00:00:00:00:00:00", "state": "FAILED", "name": null, "rtt_ms": null}]

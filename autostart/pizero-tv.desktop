@@ -1,0 +1,6 @@
+[Desktop Entry]
+Type=Application
+Name=pizero-tv display host
+Comment=legitbiz.research ambient display
+Exec=lwrespawn sh -c 'mkdir -p ~/.local/state/pizero-tv && cd ~/pizero-tv && exec python3 -m tvkit >> ~/.local/state/pizero-tv/tvd.log 2>&1'
+X-GNOME-Autostart-enabled=true
