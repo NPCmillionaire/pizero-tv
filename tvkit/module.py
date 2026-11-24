@@ -1,0 +1,77 @@
+"""The Module API every screen implements. See the suite design doc."""
+import os
+from dataclasses import dataclass
+
+from . import theme
+from .source import Source
+
+
+@dataclass
+class Ctx:
+    config: object
+    cache_dir: str | None
+    w: int = theme.W
+    h: int = theme.H
+
+
+class Module:
+    name = ""
+    title = ""            # spine text, one word, caps
+    blurb = ""            # one line for the splash
+    key = theme.SODIUM    # spine / accent color
+    aliases = ()
+    order = 100           # position in the default cycle
+
+    def __init__(self):
+        self.sources = []
+        self.ctx = None
+        self.dirty = True
+        self._seen = None
+
+    # lifecycle ------------------------------------------------------------
+    def start(self, ctx):
+        self.ctx = ctx
+
+    def stop(self):
+        for s in self.sources:
+            s.stop()
+        self.sources = []
+
+    def source(self, name, fetch, interval, parse=lambda x: x, cache=True):
+        cache_dir = self.ctx.cache_dir if (cache and self.ctx and self.ctx.cache_dir) else None
+        s = Source(name, fetch, interval, parse=parse, cache_dir=cache_dir)
+        self.sources.append(s)
+        return s.start()
+
+    # host hooks -----------------------------------------------------------
+    @property
+    def ready(self):
+        return all(s.status != "waiting" for s in self.sources)
+
+    def update(self, now):
+        """Return True when the static layer must be redrawn."""
+        seen = tuple((s.version, s.status) for s in self.sources)
+        changed = seen != self._seen or self.dirty
+        self._seen, self.dirty = seen, False
+        return changed
+
+    def draw_static(self, surf):
+        pass
+
+    def draw_live(self, surf, t):
+        """Draw animation over the static layer. Return True while animating."""
+        return False
+
+    def on_key(self, event):
+        pass
+
+    def status(self):
+        """Worst status across sources, for the footer: (status, age_s) or (None, None)."""
+        if not self.sources:
+            return None, None
+        for st in ("offline", "stale", "waiting"):
+            hit = [s for s in self.sources if s.status == st]
+            if hit:
+                ages = [s.age_s for s in hit if s.age_s is not None]
+                return st, (max(ages) if ages else None)
+        return "live", None
