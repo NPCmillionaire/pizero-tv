@@ -196,7 +196,7 @@ TV_WINDOWED=1 .venv/bin/python -m tvkit --only crypto  # one screen in a window
 
 ```
 bin/tv           the CLI (local socket, or ssh with -H)
-tvkit/           host, splash, Module API, Source, theme, text, charts, world map, fonts
+tvkit/           host, channels and static, Module API, Source, theme, text, charts, world map, fonts
 modules/         one folder per screen
 tools/           rebuild fonts, world map, SF basemap, MAC vendor table, test fixtures
 deploy.sh        install or update a Pi
