@@ -55,6 +55,11 @@ class Terminal(Module):
         super().start(ctx)
         self.server = ctx.mirror
         self._seen = None
+        try:
+            import pyte  # noqa: F401
+            self.has_pyte = True
+        except ImportError:
+            self.has_pyte = False
 
     def _session(self):
         s = self.server.session if self.server and self.server.conn else None
@@ -88,7 +93,7 @@ class Terminal(Module):
             self._cursor = None
             lines = (["No signal", "", "On your computer, run:", "   tv mirror -H pizero", "",
                       "Whatever happens in that terminal shows up here.", "Exit the shell to stop."]
-                     if self.server else
+                     if self.server and self.has_pyte else
                      ["No signal", "", "Terminal mirroring needs pyte on the Pi:", "   sudo apt install python3-pyte",
                       "then restart the TV (systemctl --user restart pizero-tv)."])
             for i, line in enumerate(lines):

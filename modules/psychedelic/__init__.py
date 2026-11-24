@@ -64,6 +64,7 @@ class Liquid(Art):
     name, title, key = "liquid", "LIQUID", (255, 0, 140)
     blurb = "An oil-wheel light show, the 1967 kind"
     order = 131
+    fps = 6
 
     def draw_live(self, surf, t):
         v = liquid_field(t)
