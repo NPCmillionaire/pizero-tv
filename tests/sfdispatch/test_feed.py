@@ -35,7 +35,7 @@ def test_parse_basic():
     assert c.dispatched - c.received == timedelta(seconds=99)
     assert c.type == "Traf Violation Cite"
     assert c.priority == "C" and c.hood == "Nob Hill"
-    assert c.place == "SUTTER ST \\ VAN NESS AVE"
+    assert c.place == "Sutter St / Van Ness Ave"
 
 
 def test_parse_no_location():
@@ -161,3 +161,10 @@ def test_top_hoods_excludes_unknown():
     calls = [parse_call(rec(str(i), t, analysis_neighborhood=None)) for i in range(5)]
     calls.append(parse_call(rec("x", t)))
     assert stats(calls).top_hoods == [("Nob Hill", 1)]
+
+
+def test_titlecase_keeps_acronyms_and_ordinals():
+    from feed import titlecase
+    assert titlecase("FIGHT NO WEAPON DV") == "Fight No Weapon DV"
+    assert titlecase("01ST ST \\ LANSING ST") == "01st St \\ Lansing St"
+    assert titlecase("FIGHT W/WEAPON") == "Fight W/Weapon"

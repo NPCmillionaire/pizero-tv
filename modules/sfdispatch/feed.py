@@ -34,6 +34,19 @@ class Stats:
     median_dispatch: dict
 
 
+ACRONYMS = {"DV", "DUI", "ATM", "GTA", "AMB", "SRO", "BART", "MUNI", "SFPD", "SFFD", "PD", "ID"}
+
+
+def titlecase(s):
+    """'FIGHT NO WEAPON DV' -> 'Fight No Weapon DV'; '01ST ST' -> '01st St'; keeps W/Weapon."""
+    def word(w):
+        if w.upper() in ACRONYMS:
+            return w.upper()
+        parts = w.split("/")
+        return "/".join(p[:1].upper() + p[1:].lower() if p[:1].isalpha() else p.lower() for p in parts)
+    return " ".join(word(w) for w in s.split(" "))
+
+
 def now_la():
     return datetime.now(LA)
 
@@ -62,9 +75,9 @@ def parse_call(raw):
     pr = (raw.get("priority_final") or raw.get("priority_original") or "").upper()
     return Call(
         cad=cad, received=received, dispatched=_ts(raw.get("dispatch_datetime")),
-        type=(raw.get("call_type_final_desc") or raw.get("call_type_original_desc") or "Unknown").title(),
+        type=titlecase(raw.get("call_type_final_desc") or raw.get("call_type_original_desc") or "Unknown"),
         priority=pr if pr in ("A", "B", "C") else "?",
-        place=raw.get("intersection_name") or "",
+        place=titlecase((raw.get("intersection_name") or "").replace("\\", "/")),
         hood=raw.get("analysis_neighborhood") or "Unknown",
         lon=lon, lat=lat,
     )
