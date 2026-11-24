@@ -1,6 +1,8 @@
 """Video channels: YouTube played full screen by mpv. COMPUTERPHILE, SHORTS, and any [[video]] in config."""
 import json, os, shutil, subprocess, sys, threading, time
 
+import pygame
+
 from tvkit import ORPHAN_MPV, config as config_mod, text, theme
 from tvkit.module import Module
 
@@ -10,7 +12,10 @@ ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)
 TV = os.path.join(ROOT, "bin", "tv")
 LISTING_S = 6 * 3600
 ORPHAN_PATTERN = ORPHAN_MPV
-X0 = 190
+X0 = 60
+# the card under the player: a test-pattern stand-by slide
+BARS = [(192, 192, 192), (192, 192, 0), (0, 192, 192), (0, 192, 0), (192, 0, 192), (192, 0, 0), (0, 0, 192)]
+CARD_BG, CARD_TXT, CARD_DIM = (12, 12, 16), (245, 245, 245), (150, 150, 160)
 DEFAULT_SHORTS = ["@veritasium", "@minutephysics", "@SteveMould", "@TheActionLab", "@NileRed"]   # all have Shorts tabs
 
 
@@ -50,6 +55,7 @@ class VideoChannel(Module):
     order = 100
     fps = 8
     resume = False
+    footer_color = (150, 150, 160)
 
     def start(self, ctx):
         super().start(ctx)
@@ -146,28 +152,39 @@ class VideoChannel(Module):
         return True
 
     # -- the card under the player (and when it can't play) -------------------------
+    def draw_frame(self, surf):
+        surf.fill(CARD_BG)
+        w = 1280 / len(BARS)
+        for i, c in enumerate(BARS):
+            pygame.draw.rect(surf, c, (round(i * w), 0, round((i + 1) * w) - round(i * w), 300))
+        for i, c in enumerate(reversed(BARS)):           # the thin reversed strip under the bars
+            pygame.draw.rect(surf, theme.mix(c, (0, 0, 0), 0.5), (round(i * w), 300, round(w) + 1, 28))
+        pygame.draw.rect(surf, self.key, (0, 328, 1280, 8))
+        chan = self.ctx.registry.number(self.name) if self.ctx and self.ctx.registry else None
+        label = f"{chan:02d}  {self.title}" if chan is not None else self.title
+        text.draw(surf, label, (X0, 360), "display", 64, self.key, max_w=1160)
+
     def draw_static(self, surf):
-        text.draw(surf, self.blurb, (X0, 40), "sans-500", 24, theme.BONE, max_w=1060)
+        text.draw(surf, self.blurb, (X0, 438), "sans-500", 24, CARD_TXT, max_w=1160)
         if self.problem:
-            text.draw(surf, "Can't play right now", (X0 - 4, 250), "display", 110, theme.CORAL)
-            for i, line in enumerate(text.wrap(self.problem, "sans", 24, 1060)):
-                text.draw(surf, line, (X0, 390 + i * 34), "sans", 24, theme.LICHEN)
+            text.draw(surf, "Can't play right now", (X0 - 2, 484), "display", 72, (255, 90, 90))
+            for i, line in enumerate(text.wrap(self.problem, "sans", 24, 1160)[:3]):
+                text.draw(surf, line, (X0, 572 + i * 32), "sans", 24, CARD_DIM)
             return
         if self.listing.value is None:
             msg = ("YouTube isn't answering." if self.listing.status == "offline" else
                    "Listing videos with yt-dlp. On a Pi Zero the first visit takes a minute or two; after that "
                    "the list is cached for six hours.")
-            text.draw(surf, "Tuning in", (X0 - 4, 250), "display", 110, self.key)
-            for i, line in enumerate(text.wrap(msg, "sans", 24, 1060)):
-                text.draw(surf, line, (X0, 390 + i * 34), "sans", 24, theme.LICHEN)
+            text.draw(surf, "Please stand by", (X0 - 2, 484), "display", 72, CARD_TXT)
+            for i, line in enumerate(text.wrap(msg, "sans", 24, 1160)[:3]):
+                text.draw(surf, line, (X0, 572 + i * 32), "sans", 24, CARD_DIM)
             return
         e = self.now_playing
-        text.draw(surf, "Now playing" if e else "Tuning in", (X0, 230), "sans", 24, theme.LICHEN)
+        text.draw(surf, "Now playing" if e else "Please stand by", (X0, 486), "sans", 24, CARD_DIM)
         if e:
-            lines = text.wrap(data.clean_title(e.title), "display", 84, 1060)[:3]
-            for i, line in enumerate(lines):
-                text.draw(surf, line, (X0 - 4, 262 + i * 88), "display", 84, self.key)
-        text.draw(surf, f"{len(self.listing.value)} videos in rotation", (X0, 640), "sans", 18, theme.LICHEN)
+            for i, line in enumerate(text.wrap(data.clean_title(e.title), "display", 60, 1160)[:2]):
+                text.draw(surf, line, (X0 - 2, 516 + i * 62), "display", 60, CARD_TXT)
+        text.draw(surf, f"{len(self.listing.value)} videos in rotation", (X0, 676), "sans", 18, CARD_DIM)
 
 
 def channel(name, title, urls, blurb, key, order, aliases=()):
