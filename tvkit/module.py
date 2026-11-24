@@ -13,6 +13,7 @@ class Ctx:
     w: int = theme.W
     h: int = theme.H
     fakes: dict | None = None   # tests: {source name: payload, "__mode__": waiting|live|stale|offline}
+    registry: object = None     # the host's channel list (the guide reads it)
 
 
 class Module:

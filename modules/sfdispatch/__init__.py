@@ -33,7 +33,7 @@ class Dispatch(Module):
     name, title, key = "sfdispatch", "DISPATCH", theme.KEYS["sfdispatch"]
     blurb = "Live San Francisco police calls for service"
     aliases = ("dispatch", "sf")
-    order = 90
+    order = 72
 
     def start(self, ctx):
         super().start(ctx)

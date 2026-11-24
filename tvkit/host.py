@@ -40,7 +40,7 @@ class Host:
         try:
             self.current = cls()
             cache = os.path.join(self.cache_root, cls.name) if self.cache_root else None
-            self.current.start(Ctx(self.config, cache))
+            self.current.start(Ctx(self.config, cache, registry=self.registry))
         except Exception:
             self._crash(traceback.format_exc())
         self._save()
