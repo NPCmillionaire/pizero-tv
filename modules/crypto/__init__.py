@@ -4,14 +4,20 @@ import math
 import pygame
 import requests
 
-from tvkit import charts, text, theme
+from tvkit import charts, fx, text, theme
 from tvkit.module import Module
 
 from . import data
 
 CG = "https://api.coingecko.com/api/v3"
 UA = {"User-Agent": "pizero-tv"}
-X0, RX = 190, 800
+# late-night trading show: black-violet studio, neon sign tubes, loud type
+NIGHT_TOP, NIGHT_BOTTOM = (26, 4, 48), (3, 0, 10)
+PINK, CYAN, YELLOW, WHITE, HAZE = (255, 46, 170), (0, 228, 255), (255, 228, 0), (255, 255, 255), (150, 120, 190)
+UP, DOWN = (0, 255, 150), (255, 60, 96)
+CHART = pygame.Rect(48, 352, 700, 120)
+GAUGE_C, GAUGE_R = (1020, 300), 170
+BOARD_Y = 512
 
 
 def _get(url, **params):
@@ -21,14 +27,14 @@ def _get(url, **params):
 
 
 def _col(v):
-    return theme.LICHEN if v is None else (theme.SEAGLASS if v >= 0 else theme.CORAL)
+    return HAZE if v is None else (UP if v >= 0 else DOWN)
 
 
 def _pct(v):
     return "—" if v is None else f"{v:+.2f}%".replace("-", "−")
 
 
-SENTIMENT = [(25, theme.CORAL), (45, theme.SODIUM), (55, theme.LICHEN), (75, (160, 214, 140)), (101, theme.SEAGLASS)]
+SENTIMENT = [(25, DOWN), (45, (255, 140, 40)), (55, YELLOW), (75, (150, 255, 80)), (101, UP)]
 
 
 def _sent_color(v):
@@ -37,8 +43,10 @@ def _sent_color(v):
 
 class Crypto(Module):
     name, title, key = "crypto", "CRYPTO", theme.KEYS["crypto"]
-    blurb = "Bitcoin up close, the top coins, and the market's mood"
+    blurb = "Crypto after dark: bitcoin, the board, and the market's mood"
     order = 30
+    fps = 12
+    footer_color = HAZE
 
     def start(self, ctx):
         super().start(ctx)
@@ -51,98 +59,97 @@ class Crypto(Module):
         self.fng = self.source("fng", lambda: _get("https://api.alternative.me/fng/", limit=30), 1800,
                                parse=data.parse_fng)
 
+    # -- the studio ------------------------------------------------------------------
+    def draw_frame(self, surf):
+        surf.blit(fx.gradient((theme.W, theme.H), NIGHT_TOP, NIGHT_BOTTOM), (0, 0))
+        for inset, col in ((6, PINK), (11, theme.mix(PINK, NIGHT_TOP, 0.6))):     # the neon border tube
+            pygame.draw.rect(surf, col, (inset, inset, theme.W - 2 * inset, theme.H - 2 * inset), 2, border_radius=18)
+        img = fx.glow_text("Crypto after dark", "loud", 30, (255, 170, 225), radius=4, halo=PINK)
+        surf.blit(img, (40, 30))
+
     def draw_static(self, surf):
         coins = self.markets.value
         if not coins:
             msg = {"offline": "CoinGecko isn't answering. Prices appear when it does.",
                    "waiting": "Fetching prices from CoinGecko."}.get(self.markets.status, "")
-            text.draw(surf, "Bitcoin", (X0, 34), "sans-500", 22, theme.LICHEN)
-            text.draw(surf, "—", (X0 - 6, 58), "display", 168, theme.TIDE)
-            text.draw(surf, msg, (X0, 300), "sans", 24, theme.LICHEN, max_w=1000)
+            surf.blit(fx.glow_text("Stand by", "loud", 110, WHITE, radius=5, halo=CYAN), (40, 150))
+            text.draw(surf, msg, (52, 330), "sans", 26, HAZE, max_w=1150)
             return
         btc = next((c for c in coins if c.id == "bitcoin"), coins[0])
         self._hero(surf, btc)
         self._candles(surf)
-        self._watchlist(surf, [c for c in data.watchable(coins) if c.id != btc.id][:8])
-        self._market(surf)
-        self._sentiment(surf)
+        self._gauge(surf)
+        self._board(surf, [c for c in data.watchable(coins) if c.id != btc.id][:8])
+
+    def draw_live(self, surf, t):
+        # the ON AIR lamp breathes; everything else holds still
+        a = 0.55 + 0.45 * math.sin(t * 2.4)
+        col = theme.mix(NIGHT_TOP, (255, 40, 60), a)
+        pygame.draw.circle(surf, col, (1196, 52), 9)
+        return True
 
     def _hero(self, surf, btc):
-        text.draw(surf, btc.name, (X0, 34), "sans-500", 22, theme.BONE)
-        r = text.draw(surf, data.money(btc.price), (X0 - 6, 58), "display", 168, theme.BONE, max_w=580)
-        text.draw(surf, f"{_pct(btc.chg24)} in 24 hours", (X0, r.bottom - 6), "display-400", 44, _col(btc.chg24),
-                  max_w=560)
+        text.draw(surf, btc.name, (52, 100), "loud", 26, CYAN)
+        price = fx.glow_text(data.money(btc.price), "loud", 96, WHITE, radius=6, halo=PINK)
+        if price.get_width() > 720:
+            price = pygame.transform.smoothscale(price, (720, int(price.get_height() * 720 / price.get_width())))
+        surf.blit(price, (36, 128))
+        text.draw(surf, f"{_pct(btc.chg24)} today", (52, 262), "loud", 34, _col(btc.chg24), max_w=420)
         if btc.chg7d is not None:
-            text.draw(surf, f"{_pct(btc.chg7d)} over 7 days", (X0, r.bottom + 46), "sans", 20, theme.LICHEN)
+            text.draw(surf, f"{_pct(btc.chg7d)} this week", (480, 272), "sans-500", 24, _col(btc.chg7d), max_w=270)
 
     def _candles(self, surf):
-        x, y, w, h = RX, 54, 450, 210
-        text.draw(surf, "Bitcoin, last 24 hours", (x, 26), "sans-500", 20, theme.BONE)
         o = self.ohlc.value
+        text.draw(surf, "Last 24 hours", (CHART.left, CHART.top - 30), "sans-500", 20, HAZE)
         if not o:
-            text.draw(surf, "Loading candles.", (x, y + 10), "sans", 18, theme.LICHEN)
+            text.draw(surf, "Loading candles.", CHART.topleft, "sans", 20, HAZE)
             return
-        lo, hi = charts.candles(surf, (x, y, w, h), o.opens, o.highs, o.lows, o.closes)
-        text.draw(surf, f"Range {data.money(lo)} to {data.money(hi)}, 30-minute candles", (x, y + h + 10), "sans", 16,
-                  theme.LICHEN, max_w=w)
+        lo, hi = charts.candles(surf, CHART, o.opens, o.highs, o.lows, o.closes, up=UP, down=PINK)
+        text.draw(surf, f"{data.money(lo)} to {data.money(hi)}", (CHART.right, CHART.top - 30), "sans", 18, HAZE,
+                  anchor="topright")
 
-    def _watchlist(self, surf, coins):
-        y0 = 352
-        pygame.draw.line(surf, theme.TIDE, (X0, y0 - 16), (760, y0 - 16), 1)
-        for i, c in enumerate(coins):
-            y = y0 + i * 42
-            text.draw(surf, c.symbol, (X0, y), "display-600", 30, self.key, max_w=90)
-            text.draw(surf, c.name, (X0 + 92, y + 6), "sans", 18, theme.LICHEN, max_w=150)
-            text.draw(surf, data.money(c.price), (X0 + 390, y + 2), "display-600", 30, theme.BONE, anchor="topright")
-            text.draw(surf, _pct(c.chg24), (X0 + 490, y + 6), "sans-500", 18, _col(c.chg24), anchor="topright")
-            # where the price sits in its 24 h range
-            bx, bw = X0 + 504, 66
-            f = data.range_position(c.price, c.lo24, c.hi24)
-            pygame.draw.line(surf, theme.TIDE, (bx, y + 17), (bx + bw, y + 17), 3)
-            pygame.draw.circle(surf, theme.BONE, (int(bx + f * bw), y + 17), 4)
-        text.draw(surf, "Dots show where each price sits in its 24-hour range", (X0, y0 + len(coins) * 42),
-                  "sans", 14, theme.LICHEN, max_w=570)
-
-    def _market(self, surf):
-        g = self.glob.value
-        x, y = RX, 336
-        if not g:
-            return
-        text.draw(surf, "All crypto", (x, y), "sans", 18, theme.LICHEN)
-        text.draw(surf, data.money(g.total_mcap), (x, y + 20), "display-600", 44, theme.BONE)
-        text.draw(surf, f"{_pct(g.mcap_change_24h)} today", (x, y + 70), "sans-500", 18, _col(g.mcap_change_24h))
-        text.draw(surf, "Traded in 24 h", (x + 240, y), "sans", 18, theme.LICHEN)
-        text.draw(surf, data.money(g.volume), (x + 240, y + 20), "display-600", 44, theme.BONE)
-        # dominance bar
-        by, bw = y + 108, 450
-        btc_w = int(bw * g.btc_dominance / 100)
-        eth_w = int(bw * g.eth_dominance / 100)
-        pygame.draw.rect(surf, self.key, (x, by, btc_w, 10))
-        pygame.draw.rect(surf, theme.LICHEN, (x + btc_w, by, eth_w, 10))
-        pygame.draw.rect(surf, theme.TIDE, (x + btc_w + eth_w, by, bw - btc_w - eth_w, 10))
-        text.draw(surf, f"Bitcoin {g.btc_dominance:.1f}% of all value, ether {g.eth_dominance:.1f}%",
-                  (x, by + 16), "sans", 16, theme.LICHEN, max_w=bw)
-
-    def _sentiment(self, surf):
+    def _gauge(self, surf):
+        cx, cy = GAUGE_C
         f = self.fng.value
-        x, y = RX, 492
+        text.draw(surf, "Fear and greed", (cx, 92), "loud", 24, YELLOW, anchor="midtop")
+        for i in range(50):                         # the dial, fear (left) to greed (right)
+            a0, a1 = math.pi * (1 - i / 50), math.pi * (1 - (i + 1) / 50) - 0.004
+            ro, ri = GAUGE_R, GAUGE_R - 20
+            pts = [(cx + ro * math.cos(a0), cy - ro * math.sin(a0)), (cx + ro * math.cos(a1), cy - ro * math.sin(a1)),
+                   (cx + ri * math.cos(a1), cy - ri * math.sin(a1)), (cx + ri * math.cos(a0), cy - ri * math.sin(a0))]
+            pygame.draw.polygon(surf, theme.mix(NIGHT_TOP, _sent_color(i * 2 + 1), 0.85), pts)
         if not f:
+            text.draw(surf, "Loading", (cx, cy - 40), "loud", 30, HAZE, anchor="center")
             return
         now = f[0]
+        a = math.pi * (1 - now.value / 100)
+        tip = (cx + (GAUGE_R - 30) * math.cos(a), cy - (GAUGE_R - 30) * math.sin(a))
+        pygame.draw.line(surf, WHITE, (cx, cy), tip, 5)
+        pygame.draw.circle(surf, WHITE, (cx, cy), 10)
         col = _sent_color(now.value)
-        text.draw(surf, "Fear and greed", (x, y), "sans", 18, theme.LICHEN)
-        r = text.draw(surf, str(now.value), (x - 2, y + 18), "display", 96, col)
-        text.draw(surf, now.label, (r.right + 14, y + 40), "display-400", 40, col, max_w=450 - r.width - 20)
-        text.draw(surf, "0 is extreme fear, 100 extreme greed", (r.right + 14, y + 86), "sans", 14, theme.LICHEN,
-                  max_w=450 - r.width - 20)
-        # last 30 days, oldest left
-        hist = list(reversed(f[:30]))
-        bx, bw, bh, base = x, 450, 40, y + 168
-        step = bw / max(1, len(hist))
-        for i, s in enumerate(hist):
-            hh = max(2, s.value / 100 * bh)
-            pygame.draw.rect(surf, _sent_color(s.value), (bx + i * step, base - hh, max(2, step - 3), hh))
-        text.draw(surf, "Last 30 days", (x + bw, base - bh - 18), "sans", 14, theme.LICHEN, anchor="topright")
+        surf.blit(img := fx.glow_text(str(now.value), "loud", 64, WHITE, radius=5, halo=col),
+                  (cx - img.get_width() // 2, cy + 12))
+        text.draw(surf, now.label, (cx, cy + 104), "loud", 26, col, anchor="midtop", max_w=420)
+        text.draw(surf, "0 fear", (cx - GAUGE_R, cy + 14), "sans", 16, HAZE, anchor="midtop")
+        text.draw(surf, "100 greed", (cx + GAUGE_R, cy + 14), "sans", 16, HAZE, anchor="midtop")
+        g = self.glob.value
+        if g:
+            text.draw(surf, f"All crypto {data.money(g.total_mcap)}, {_pct(g.mcap_change_24h)} today. "
+                            f"Bitcoin is {g.btc_dominance:.0f}% of it.", (cx, cy + 148), "sans", 18, HAZE,
+                      anchor="midtop", max_w=440)
+
+    def _board(self, surf, coins):
+        cols, w, h, gap = 4, 286, 76, 12
+        for i, c in enumerate(coins):
+            x = 48 + (i % cols) * (w + gap)
+            y = BOARD_Y + (i // cols) * (h + gap)
+            pygame.draw.rect(surf, theme.mix(NIGHT_BOTTOM, PINK, 0.12), (x, y, w, h), border_radius=10)
+            pygame.draw.rect(surf, theme.mix(NIGHT_BOTTOM, CYAN, 0.45), (x, y, w, h), 1, border_radius=10)
+            text.draw(surf, c.symbol, (x + 14, y + 10), "loud", 26, YELLOW, max_w=110)
+            text.draw(surf, c.name, (x + 14, y + 46), "sans", 16, HAZE, max_w=120)
+            text.draw(surf, data.money(c.price), (x + w - 14, y + 10), "mono-500", 24, WHITE, anchor="topright",
+                      max_w=w - 140)
+            text.draw(surf, _pct(c.chg24), (x + w - 14, y + 44), "mono-500", 20, _col(c.chg24), anchor="topright")
 
 
 MODULE = Crypto

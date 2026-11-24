@@ -35,25 +35,25 @@ def scanlines(surf, strength=60, every=2):
 
 
 @lru_cache(maxsize=64)
-def _glow(s, role, size, color, radius):
+def _glow(s, role, size, color, halo, radius):
     if text.CHECK_GLYPHS:
         text._check(role, s)
-    core = text.font(role, size).render(s, True, color)
+    f = text.font(role, size)
+    core = f.render(s, True, color)
     w, h = core.get_width() + radius * 4, core.get_height() + radius * 4
-    halo = pygame.Surface((w, h), pygame.SRCALPHA)
-    halo.blit(core, (radius * 2, radius * 2))
-    small = pygame.transform.smoothscale(halo, (max(1, w // (radius + 1)), max(1, h // (radius + 1))))
-    halo = pygame.transform.smoothscale(small, (w, h))          # a cheap blur
     out = pygame.Surface((w, h), pygame.SRCALPHA)
-    out.blit(halo, (0, 0))
-    out.blit(halo, (0, 0))
+    glow = pygame.Surface((w, h), pygame.SRCALPHA)
+    glow.blit(f.render(s, True, halo), (radius * 2, radius * 2))
+    k = radius + 1
+    glow = pygame.transform.smoothscale(pygame.transform.smoothscale(glow, (max(1, w // k), max(1, h // k))), (w, h))
+    out.blit(glow, (0, 0))
     out.blit(core, (radius * 2, radius * 2))
     return out
 
 
-def glow_text(s, role, size, color, radius=3):
-    """Text with a soft phosphor/neon halo, on a transparent surface."""
-    return _glow(s, role, size, tuple(color), radius)
+def glow_text(s, role, size, color, radius=3, halo=None):
+    """Text with a soft neon/phosphor halo (in `halo`, default the text color), on a transparent surface."""
+    return _glow(s, role, size, tuple(color), tuple(halo or color), radius)
 
 
 class Crawl:
