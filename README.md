@@ -3,7 +3,7 @@
 **A $15 computer pretending to be a mission control center, and getting away with it.**
 
 pizero-tv turns a Raspberry Pi Zero 2 W and whatever TV you've stopped watching into an
-ambient intelligence wall: sixteen channels of live data, video and generative art, flipped like an old TV
+ambient intelligence wall: two dozen channels of live data, video and generative art, flipped like an old TV
 and controlled from any terminal on your network. Every channel is its own station, with its own look.
 Guests will ask what you do for a living. Say "research." Leave it there.
 
@@ -37,14 +37,19 @@ decency to look like a wall.
 | 02 | MARKETS | A business-news desk | S&P 500 intraday, a spotlight stock, sectors, a two-line ticker | Yahoo Finance |
 | 03 | CRYPTO | A late-night neon trading show | Bitcoin, the board, a fear-and-greed dial | CoinGecko, alternative.me |
 | 04 | THREATS | An amber war-room CRT | The internet's threat level, most probed ports, where attackers are | SANS Internet Storm Center, ip-api, abuse.ch |
-| 05 | AIRSPACE | An approach-control scope | Aircraft within 60 nm, with paper flight strips | adsb.lol |
-| 06 | ORBIT | Mission control | The ISS, day and night on Earth, space weather | wheretheiss.at, NOAA SWPC, NASA |
-| 07 | SIGNAL | A breaking-news bulletin | Earthquakes worldwide, world clocks, the Hacker News front page | USGS, Hacker News |
-| 08 | DISPATCH | A police dispatch terminal | San Francisco police calls on a street map | DataSF |
-| 09 | SYSTEM | A BIOS setup screen | The Pi, plus any other machine you point it at | psutil, the stats agent |
-| 10 | LAN | Submarine sonar | Every device on your network, newcomers flagged | your neighbor table, a ping sweep |
-| 11–13 | MATRIX, OUTRUN, TRIPPY | Themselves | Digital rain, a synthwave road, generative color | art |
-| 14–15 | COMPUTERPHILE, SHORTS | Color bars, then the video | YouTube, full screen, with captions | yt-dlp and mpv |
+| 05 | WANTED | Wanted posters on a corkboard | Vulnerabilities attackers are exploiting right now, newest first | CISA Known Exploited Vulnerabilities |
+| 06 | AIRSPACE | An approach-control scope | Aircraft within 60 nm, with paper flight strips | adsb.lol |
+| 07 | REGISTRY | A detective's case file | Who owns the planes overhead: owner, city, make, year | FAA registry (via govint-data) |
+| 08 | ORBIT | Mission control | The ISS, day and night on Earth, space weather | wheretheiss.at, NOAA SWPC, NASA |
+| 09 | SIGNAL | A breaking-news bulletin | Earthquakes worldwide, world clocks, the Hacker News front page | USGS, Hacker News |
+| 10 | DISPATCH | A police dispatch terminal | San Francisco police calls on a street map | DataSF |
+| 11 | SYSTEM | A BIOS setup screen | The Pi, plus any other machine you point it at | psutil, the stats agent |
+| 12 | MINER | A power-plant control panel | An XMRig rig's hashrate, shares and what the pool owes you | XMRig's API, MoneroOcean, CoinGecko |
+| 13 | LAN | Submarine sonar | Every device on your network, newcomers flagged | your neighbor table, a ping sweep |
+| 14 | TERMINAL | Public-access cable | Your shell, live, from `tv mirror` (tunes in by itself) | you |
+| 15–16 | COMPUTERPHILE, SHORTS | Color bars, then the video | YouTube, full screen, with captions | yt-dlp and mpv |
+| 17–19 | MATRIX, OUTRUN, TRIPPY | Themselves | Digital rain, a synthwave road, generative color | art |
+| 20–23 | LIQUID, MANDALA, FRACTAL, DREAM | A 1967 light show, sacred geometry, a morphing Julia set, video feedback | Full-screen psychedelia | art (and numpy) |
 
 Channel numbers follow the order on your Pi (`tv list` shows them), so yours may differ if you add channels.
 
@@ -162,6 +167,29 @@ name = "darwin"
 url = "http://darwin.local:8765"
 ```
 
+### MINER
+
+Point it at an XMRig rig with the HTTP API turned on (`"http": {"enabled": true,
+"restricted": true, "access-token": "..."}`, port published on your LAN), and give it your
+pool wallet for the payout side (MoneroOcean's public API):
+
+```toml
+[miner]
+url = "http://arch.lan:8081"
+token = "the rig's access-token"
+wallet = "4..."
+```
+
+### TERMINAL
+
+```bash
+tv mirror -H pizero       # this terminal goes on the TV until you exit the shell
+```
+
+Your shell keeps working as normal; everything it prints is also streamed to the Pi, which
+tunes to TERMINAL while you're connected and goes back to what was on when you exit.
+Nothing is recorded. The Pi needs `sudo apt install python3-pyte` for this one.
+
 ## Drive it
 
 ```bash
@@ -274,8 +302,8 @@ off the screen. And keep the one rule: if the data isn't there, say so.
 
 ```bash
 uv venv --python 3.13 .venv
-uv pip install pytest pygame==2.6.1 requests numpy psutil fonttools yt-dlp
-.venv/bin/python -m pytest -q                         # 421 tests
+uv pip install pytest pygame==2.6.1 requests numpy psutil fonttools yt-dlp pyte
+.venv/bin/python -m pytest -q                         # 481 tests
 TV_WINDOWED=1 .venv/bin/python -m tvkit --only crypto  # one screen in a window
 ```
 
