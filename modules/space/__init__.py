@@ -9,8 +9,11 @@ from tvkit.module import Module
 
 from . import data
 
-X0 = 190
-MAP = (190, 196, 1060, world.height_for(1060))
+# mission control: the big front screen, telemetry tiles along the top, consoles down the side
+ROOM, TILE, EDGE = (5, 12, 26), (10, 24, 46), (40, 74, 118)
+BLUE, WHITE, DIM, AMBER, RED = (96, 176, 255), (236, 244, 255), (110, 140, 184), (255, 186, 60), (255, 90, 80)
+MAP = (30, 196, 1000, world.height_for(1000))
+SIDE_X, SIDE_W = 1046, 204
 UA = {"User-Agent": "pizero-tv"}
 
 
@@ -25,6 +28,8 @@ class Orbit(Module):
     blurb = "The space station's path, day and night, and space weather"
     aliases = ("orbit", "iss")
     order = 60
+    fps = 8
+    footer_color = DIM
 
     def start(self, ctx):
         super().start(ctx)
@@ -51,31 +56,74 @@ class Orbit(Module):
             self._where = (data.where(i.lat, i.lon), (i.lon, i.lat))
         return i
 
-    # ------------------------------------------------------------------------------
+    # -- the control room ----------------------------------------------------------------
+    def draw_frame(self, surf):
+        surf.fill(ROOM)
+        text.draw(surf, "Orbit", (30, 18), "console-700", 40, BLUE)
+        text.draw(surf, "International Space Station", (150, 32), "console", 20, DIM)
+        x, y, w, h = MAP
+        pygame.draw.rect(surf, (3, 8, 18), (x, y, w, h))
+        for lon in range(-180, 181, 30):
+            px = round(x + (lon + 180) / 360 * w)
+            pygame.draw.line(surf, (16, 32, 58), (px, y), (px, y + h), 1)
+        for lat in range(-60, 61, 30):
+            py = self.proj.to_px(0, lat)[1]
+            pygame.draw.line(surf, (16, 32, 58), (x, py), (x + w, py), 1)
+
     def draw_static(self, surf):
         i = self.iss.value
-        self._hero(surf, i)
+        self._telemetry(surf, i)
         self._map_layer(surf, i)
+        pygame.draw.rect(surf, EDGE, (MAP[0] - 1, MAP[1] - 1, MAP[2] + 2, MAP[3] + 2), 1)
+        text.draw(surf, "Ground track, last 100 minutes. Shading is night on Earth; the amber dot is the "
+                        "point directly under the sun.", (MAP[0], MAP[1] + MAP[3] + 12), "console", 16, DIM,
+                  max_w=MAP[2])
         self._weather(surf)
 
-    def _hero(self, surf, i):
-        text.draw(surf, "International Space Station", (X0, 28), "sans-500", 22, theme.BONE)
+    def _tile(self, surf, r, label, value, col=WHITE, size=32):
+        pygame.draw.rect(surf, TILE, r)
+        pygame.draw.rect(surf, EDGE, r, 1)
+        pygame.draw.rect(surf, BLUE, (r.left, r.top, 3, r.height))
+        text.draw(surf, label, (r.left + 14, r.top + 8), "console", 15, DIM, max_w=r.width - 24)
+        text.draw(surf, value, (r.left + 14, r.bottom - 8), "console-700", size, col, anchor="bottomleft",
+                  max_w=r.width - 24)
+
+    def _telemetry(self, surf, i):
+        y, h = 88, 92
         if i is None:
             msg = {"offline": "The ISS position service isn't answering.",
-                   "waiting": "Finding the space station."}.get(self.iss.status, "")
-            text.draw(surf, msg, (X0, 70), "sans", 24, theme.LICHEN)
+                   "waiting": "Acquiring the space station."}.get(self.iss.status, "")
+            self._tile(surf, pygame.Rect(30, y, 1220, h), "Telemetry", msg, DIM, 28)
             return
-        place = self._where[0]
-        light = "in daylight" if i.daylight else "in Earth's shadow"
-        r = text.draw(surf, f"Over {place}", (X0 - 2, 52), "display", 84, self.key, max_w=700)
-        text.draw(surf, f"Flying {light}, {i.alt_km:,.0f} km up. One lap of Earth takes about 92 minutes.",
-                  (X0, r.bottom + 2), "sans", 22, theme.LICHEN, max_w=700)
-        text.draw(surf, f"{i.speed_kmh:,.0f}", (1250, 20), "display", 110, theme.BONE, anchor="topright")
-        text.draw(surf, "km/h", (1250, 128), "sans", 18, theme.LICHEN, anchor="topright")
+        lat = f"{abs(i.lat):.2f}° {'N' if i.lat >= 0 else 'S'}"
+        lon = f"{abs(i.lon):.2f}° {'E' if i.lon >= 0 else 'W'}"
+        sun = "sunlit" if i.daylight else "in Earth's shadow"
+        tiles = [(380, f"Over, {sun}", self._where[0] or "open ocean", BLUE),
+                 (190, "Altitude", f"{i.alt_km:,.0f} km", WHITE),
+                 (250, "Velocity", f"{i.speed_kmh:,.0f} km/h", WHITE),
+                 (190, "Position", lat, WHITE),
+                 (190, "", lon, WHITE)]
+        x = 30
+        gap = (1220 - sum(t[0] for t in tiles)) // (len(tiles) - 1)
+        for w, label, value, col in tiles:
+            self._tile(surf, pygame.Rect(x, y, w, h), label, value, col)
+            x += w + gap
+
+    def draw_live(self, surf, t):
+        from datetime import datetime, timezone
+        now = datetime.now(timezone.utc)
+        clock = now.strftime("GMT %j:%H:%M:%S")          # day of year, the way flight controllers write it
+        pygame.draw.rect(surf, ROOM, (960, 4, 300, 70))
+        text.draw(surf, clock, (1250, 24), "console-700", 28, WHITE, anchor="topright")
+        pos = getattr(self, "_pos", None)
+        if pos:
+            k = (t % 2.0) / 2.0
+            pygame.draw.circle(surf, theme.mix(ROOM, BLUE, 1 - k), pos, int(10 + 22 * k), 2)
+        return True
 
     def _map_layer(self, surf, i):
         if self._map is None:
-            self._map = world.render(MAP, (26, 54, 66), (34, 66, 80))
+            self._map = world.render(MAP, (22, 48, 82), (54, 96, 150))
         surf.blit(self._map, MAP[:2])
         if i is None:
             return
@@ -85,7 +133,7 @@ class Orbit(Module):
         surf.blit(self._night, MAP[:2])
         # the sun's position: where it is directly overhead
         sx, sy = self.proj.to_px(i.sun_lon, i.sun_lat)
-        pygame.draw.circle(surf, theme.SODIUM, (sx, sy), 6)
+        pygame.draw.circle(surf, AMBER, (sx, sy), 6)
         with self.lock:
             trail = list(self.trail)
         seg = []
@@ -93,14 +141,14 @@ class Orbit(Module):
             p = self.proj.to_px(lon, lat)
             if seg and abs(p[0] - seg[-1][0]) > MAP[2] / 2:      # wrapped around the date line
                 if len(seg) > 1:
-                    pygame.draw.lines(surf, theme.mix(theme.GROUND, self.key, 0.7), False, seg, 2)
+                    pygame.draw.lines(surf, theme.mix(ROOM, BLUE, 0.8), False, seg, 2)
                 seg = []
             seg.append(p)
         if len(seg) > 1:
-            pygame.draw.lines(surf, theme.mix(theme.GROUND, self.key, 0.7), False, seg, 2)
+            pygame.draw.lines(surf, theme.mix(ROOM, BLUE, 0.8), False, seg, 2)
         self._pos = self.proj.to_px(i.lon, i.lat)
-        pygame.draw.circle(surf, self.key, self._pos, 8)
-        pygame.draw.circle(surf, theme.BONE, self._pos, 8, 2)
+        pygame.draw.circle(surf, BLUE, self._pos, 8)
+        pygame.draw.circle(surf, WHITE, self._pos, 8, 2)
 
     def _render_night(self, sun_lat, sun_lon):
         w, h = MAP[2], MAP[3]
@@ -109,37 +157,37 @@ class Orbit(Module):
         line = [p.to_px(lon, lat) for lon, lat in data.terminator(sun_lat, sun_lon)]
         dark_edge = h if sun_lat > 0 else 0          # the pole tilted away from the sun is in darkness
         poly = line + [(w, dark_edge), (0, dark_edge)]
-        pygame.draw.polygon(layer, (2, 8, 12, 150), poly)
-        pygame.draw.lines(layer, (*self.key, 90), False, line, 1)
+        pygame.draw.polygon(layer, (0, 4, 12, 160), poly)
+        pygame.draw.lines(layer, (*AMBER, 110), False, line, 1)
         return layer
 
     def _weather(self, surf):
-        y = MAP[1] + MAP[3] + 16
-        colw = 340
-        k = self.kp.value
+        y0, h = MAP[1], (MAP[3] - 2 * 10) // 3
+        k, wnd, n = self.kp.value, self.wind.value, self.neo.value
+        rows = []
         if k:
             lvl, g = data.storm_level(k[-1].kp)
-            text.draw(surf, "Geomagnetic activity", (X0, y), "sans", 16, theme.LICHEN)
-            text.draw(surf, f"Kp {k[-1].kp:.1f}, {lvl}" + (f" ({g})" if g else ""), (X0, y + 20), "sans-500", 22,
-                      theme.CORAL if g else theme.BONE, max_w=colw - 20)
-        wnd = self.wind.value
+            rows.append(("Geomagnetic Kp", f"{k[-1].kp:.1f}", (g or lvl), RED if g else WHITE))
+        else:
+            rows.append(("Geomagnetic Kp", "—", "no data yet", DIM))
         if wnd:
-            text.draw(surf, "Solar wind", (X0 + colw, y), "sans", 16, theme.LICHEN)
-            text.draw(surf, f"{wnd.speed:,.0f} km/s" + (f", {wnd.density:.1f} protons/cm³" if wnd.density else ""),
-                      (X0 + colw, y + 20), "sans-500", 22, theme.BONE, max_w=colw - 20)
-        n = self.neo.value
+            rows.append(("Solar wind", f"{wnd.speed:,.0f}", "km/s" + (f", {wnd.density:.1f} p/cm³" if wnd.density else ""),
+                         WHITE))
+        else:
+            rows.append(("Solar wind", "—", "no data yet", DIM))
         if n:
             a = n[0]
-            text.draw(surf, "Closest asteroid today", (X0 + 2 * colw, y), "sans", 16, theme.LICHEN)
-            text.draw(surf, f"{a.name}, {a.lunar:.1f}× the Moon's distance", (X0 + 2 * colw, y + 20), "sans-500", 22,
-                      theme.CORAL if a.hazardous else theme.BONE, max_w=1250 - X0 - 2 * colw)
-
-    def draw_live(self, surf, t):
-        pos = getattr(self, "_pos", None)
-        if pos:
-            k = (t % 2.0) / 2.0
-            pygame.draw.circle(surf, theme.mix(theme.GROUND, self.key, 1 - k), pos, int(10 + 22 * k), 2)
-        return False      # a slow ping reads fine at the idle frame rate
+            rows.append(("Closest asteroid", f"{a.lunar:.1f}×", f"Moon's distance: {a.name}", RED if a.hazardous else WHITE))
+        else:
+            rows.append(("Closest asteroid", "—", "no data yet", DIM))
+        for i, (label, big, note, col) in enumerate(rows):
+            r = pygame.Rect(SIDE_X, y0 + i * (h + 10), SIDE_W, h)
+            pygame.draw.rect(surf, TILE, r)
+            pygame.draw.rect(surf, EDGE, r, 1)
+            text.draw(surf, label, (r.left + 14, r.top + 10), "console", 16, DIM, max_w=r.width - 24)
+            text.draw(surf, big, (r.left + 12, r.top + 28), "console-700", 46, col, max_w=r.width - 24)
+            for j, line in enumerate(text.wrap(note, "console", 15, r.width - 24)[:2]):
+                text.draw(surf, line, (r.left + 14, r.top + 82 + j * 18), "console", 15, DIM, max_w=r.width - 24)
 
 
 MODULE = Orbit
