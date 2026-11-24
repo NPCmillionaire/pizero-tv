@@ -50,6 +50,7 @@ class Dispatch(Module):
         self.proj = Projector(MAP)
         self._base = self._hoods = None
         self._last_fade = 0.0
+        self._recent_cache, self._pulses = [], []
         self.src = self.source("sfpd", lambda: requests_get_json(self.feed.next_url()), 60,
                                parse=self._ingest, cache=False)
 
@@ -86,6 +87,8 @@ class Dispatch(Module):
             self.shown = [c for c in self.shown if c.received >= cutoff]
         if now - self._last_fade > 10:          # pins fade with age
             self._last_fade, changed = now, True
+        if changed:
+            self._refresh_cache()
         return changed
 
     def on_key(self, event):
@@ -94,8 +97,19 @@ class Dispatch(Module):
             self.dirty = True
 
     def _recent(self):
-        return sorted((c for c in self.shown if c.type not in QUEUE_SKIP),
-                      key=lambda c: c.received, reverse=True)[:8]
+        return self._recent_cache
+
+    def _refresh_cache(self):
+        """Per-data-change work, so draw_live does nothing heavier than circles."""
+        now = self.clock()
+        self._recent_cache = sorted((c for c in self.shown if c.type not in QUEUE_SKIP),
+                                    key=lambda c: c.received, reverse=True)[:8]
+        self._pulses = []
+        for c in self.shown[-300:]:
+            if c.priority == "A" and c.lon is not None and (now - c.received).total_seconds() <= FADE_MIN * 60:
+                p = self.proj.to_px(c.lon, c.lat)
+                if p:
+                    self._pulses.append((p, hash(c.cad) % 7))
 
     # drawing ----------------------------------------------------------------------
     def _basemap(self):
@@ -202,14 +216,9 @@ class Dispatch(Module):
 
     def draw_live(self, surf, t):
         self.active = [(c, t0) for c, t0 in self.active if t - t0 < RIPPLE_S]
-        now = self.clock()
-        for c in self.shown[-300:]:
-            if c.priority != "A" or c.lon is None or (now - c.received).total_seconds() > FADE_MIN * 60:
-                continue
-            p = self.proj.to_px(c.lon, c.lat)
-            if p:
-                k = (math.sin(t * 3 + hash(c.cad) % 7) + 1) / 2
-                pygame.draw.circle(surf, theme.CORAL, p, int(5 + 3 * k), 1)
+        for p, phase in self._pulses:
+            k = (math.sin(t * 3 + phase) + 1) / 2
+            pygame.draw.circle(surf, theme.CORAL, p, int(5 + 3 * k), 1)
         for c, t0 in self.active:
             p = self.proj.to_px(c.lon, c.lat) if c.lon is not None else None
             k = (t - t0) / RIPPLE_S

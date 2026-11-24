@@ -54,6 +54,9 @@ class Host:
         if not order:
             return self.standby()
         cur = self.cls.name if self.cls else None
+        if order == [cur] and self.current is not None and self.phase == "module":
+            self.t_shown = self.clock()       # nothing to rotate to: keep it running
+            return
         i = order.index(cur) + 1 if cur in order else 0
         self.show(order[i % len(order)], mode=self.mode if self.mode == "cycle" else "show")
 

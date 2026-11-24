@@ -196,3 +196,11 @@ def test_status_json():
     h.show("aa")
     s = json.loads(h.handle("status"))
     assert s["module"] == "aa" and s["mode"] == "show" and "phase" in s
+
+
+def test_cycle_with_one_module_does_not_restart_it():
+    Counting.starts = 0
+    h, c = make(Counting)
+    h.cycle(30, None)
+    run(h, c, 70)
+    assert Counting.starts == 1 and h.phase == "module"
