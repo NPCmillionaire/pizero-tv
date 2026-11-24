@@ -3,8 +3,8 @@
 **A $15 computer pretending to be a mission control center, and getting away with it.**
 
 pizero-tv turns a Raspberry Pi Zero 2 W and whatever TV you've stopped watching into an
-ambient intelligence wall: thirteen full-screen displays of live data and generative art,
-switched by a branded splash screen and controlled from any terminal on your network.
+ambient intelligence wall: sixteen channels of live data, video and generative art, flipped like an old TV
+and controlled from any terminal on your network.
 Guests will ask what you do for a living. Say "research." Leave it there.
 
 ![Markets](docs/img/finance.png)
@@ -45,6 +45,9 @@ decency to look like a wall.
 | MATRIX | `matrix` | Digital rain in real katakana | art |
 | OUTRUN | `retro` | A synthwave road, the Game of Life, a nixie-tube clock | art |
 | TRIPPY | `trippy` | Generative color fields | art (and numpy) |
+| COMPUTERPHILE | `computerphile` | Computerphile videos, picked at random, back to back | YouTube via yt-dlp and mpv |
+| SHORTS | `shorts` | Science and engineering Shorts | YouTube via yt-dlp and mpv |
+| GUIDE | `guide` | Channel 00: what's on every channel | the channels themselves |
 
 <table>
 <tr><td><img src="docs/img/weather.png"></td><td><img src="docs/img/threatmap.png"></td></tr>
@@ -55,6 +58,38 @@ decency to look like a wall.
 
 ---
 
+## Flipping channels
+
+Every screen is a numbered channel, with the guide on 00. Changing channel gives you
+0.4 seconds of honest analog snow and then the new channel, with a green `CH 04  MARKETS`
+in the corner for three seconds, the way TVs used to. `tv up`, `tv down` and `tv 7` work
+like a remote, and so do the arrow and number keys on a plugged-in keyboard (two digits
+within a second make one channel number).
+
+## Video channels
+
+COMPUTERPHILE and SHORTS play YouTube full screen through mpv, using hardware video
+decoding, at up to 720p. The remote keeps working while a video plays. They need two things on the Pi:
+
+```bash
+sudo apt install -y mpv
+mkdir -p ~/.local/bin && curl -L -o ~/.local/bin/yt-dlp \
+  https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp && chmod +x ~/.local/bin/yt-dlp
+```
+
+Debian's packaged yt-dlp lags YouTube's changes, hence the standalone copy (run
+`~/.local/bin/yt-dlp -U` now and then). Add your own channels in `config.toml`:
+
+```toml
+[[video]]
+name = "numberphile"
+title = "NUMBERPHILE"
+url = "https://www.youtube.com/@numberphile/videos"
+
+[shorts]
+channels = ["@veritasium", "@SmarterEveryDay"]
+```
+
 ## The look
 
 Each screen's name runs up the left edge in enormous condensed type, the **spine**, so
@@ -63,9 +98,7 @@ petrol background, bone-white numbers, one accent color per screen, no boxes aro
 everything, no drop shadows, no emoji, and no text allowed to spill out of its space
 (there's a test for that). Type is Big Shoulders Display and IBM Plex, bundled.
 
-Between screens, the spine unfolds into a splash card (`legitbiz.research`, the next
-screen's name, and a link back here) that stays up until the next screen has its data,
-so the TV never flashes a desktop at your guests.
+`legitbiz.research` sits in the corner of every channel like a network bug.
 
 ---
 
@@ -107,7 +140,8 @@ subnet = "192.168.1.0/24"
 
 ```bash
 tv                       # what's on screen
-tv weather               # show a screen (names or aliases: tv list)
+tv weather               # tune by name (tv list shows channels and aliases)
+tv 4                     # tune by number; tv up / tv down to flip
 tv next                  # skip ahead
 tv cycle 90              # rotate through everything, 90 s each (the default)
 tv cycle 60 weather crypto threats
@@ -155,8 +189,8 @@ those states and fails if any text leaves the screen.
 
 ```bash
 uv venv --python 3.13 .venv
-uv pip install pytest pygame==2.6.1 requests numpy psutil fonttools
-.venv/bin/python -m pytest -q                         # 345 tests
+uv pip install pytest pygame==2.6.1 requests numpy psutil fonttools yt-dlp
+.venv/bin/python -m pytest -q                         # 393 tests
 TV_WINDOWED=1 .venv/bin/python -m tvkit --only crypto  # one screen in a window
 ```
 
