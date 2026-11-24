@@ -46,7 +46,9 @@ def test_mpv_args():
     e = data.parse_listing({"entries": CP["entries"][:1]})[0]
     a = data.mpv_args(e, 14, "COMPUTERPHILE", ytdl="/home/u/.local/bin/yt-dlp", input_conf="/tmp/in.conf")
     assert a[0] == "mpv" and "--fs" in a and a[-1] == e.url
-    assert "--ytdl-format=bv*[height<=720][vcodec^=avc1]+ba/b[height<=720]" in a
+    assert "--ytdl-format=bv*[height<=480][vcodec^=avc1]+ba/b[height<=480]" in a
+    assert "--hwdec=v4l2m2m-copy" in a and "--vo=gpu" in a and "--gpu-context=wayland" in a
+    assert "--profile=fast" in a and "--framedrop=vo" in a
     assert "--script-opts=ytdl_hook-ytdl_path=/home/u/.local/bin/yt-dlp" in a
     assert any(x.startswith("--osd-playing-msg=CH 14  COMPUTERPHILE") for x in a)
     assert "--input-conf=/tmp/in.conf" in a
@@ -177,3 +179,10 @@ def test_parse_multi_json_lines():
     out = json.dumps(CP) + "\n" + json.dumps(SH) + "\n\n"
     assert len(data.parse_json_lines(out)) == 50
     assert data.parse_json_lines("not json\n" + json.dumps(SH)) == SH["entries"]
+
+
+def test_mpv_args_turn_on_english_captions():
+    e = data.parse_listing({"entries": CP["entries"][:1]})[0]
+    a = data.mpv_args(e, 3, "X", ytdl="y", input_conf="c")
+    assert "--sub-visibility=yes" in a and "--slang=en,en-US,en-GB,en-orig" in a
+    assert "--ytdl-raw-options-append=write-auto-subs=" in a and "--ytdl-raw-options-append=sub-langs=en.*" in a

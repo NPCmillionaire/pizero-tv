@@ -31,7 +31,8 @@ user adds).
   title = "NUMBERPHILE"
   url = "https://www.youtube.com/@numberphile/videos"
   ```
-- Playback: mpv fullscreen (Wayland, hardware H.264 decode, ≤720p avc1 via yt-dlp),
+- Playback: mpv fullscreen (Wayland, hardware H.264 decode in v4l2m2m-copy mode, ≤480p avc1 via yt-dlp —
+  measured on the Pi: 720p and zero-copy paths don't work with this mpv/labwc), English captions on,
   launched by the module; when a video ends the next random one starts. Switching away
   kills mpv. The host stops redrawing while an external player owns the screen.
   The channel OSD is shown by mpv itself (`--osd-playing-msg`). Up/Down/digits inside
