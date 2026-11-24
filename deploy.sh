@@ -28,13 +28,13 @@ ln -sfn ~/pizero-tv/bin/tv ~/.local/bin/tv
 cp ~/pizero-tv/autostart/pizero-tv.desktop ~/.config/autostart/
 [ -f ~/.config/pizero-tv/config.toml ] || cp ~/pizero-tv/config.example.toml ~/.config/pizero-tv/config.toml
 [ -x ~/tv/tv ] && ~/tv/tv stop >/dev/null 2>&1
-if pgrep -f "python3 -m tvkit" >/dev/null; then
-  pkill -f "python3 -m tvkit"          # lwrespawn brings it back with the new code
-  sleep 4
-  pgrep -f "python3 -m tvkit" >/dev/null || ~/pizero-tv/bin/tv start
-else
-  ~/pizero-tv/bin/tv start
+old=$(pgrep -f "^/usr/bin/python3 -m tvkit|^python3 -m tvkit")
+if [ -n "$old" ]; then
+  kill $old
+  for i in $(seq 1 30); do kill -0 $old 2>/dev/null || break; sleep 0.5; done
+  sleep 5                               # lwrespawn (if it started the host) brings it back
 fi
+pgrep -f "python3 -m tvkit" >/dev/null || ~/pizero-tv/bin/tv start
 echo "install finished $(date)"
 EOS
 setsid nohup bash /tmp/pizero-tv-install.sh > /tmp/pizero-tv-install.log 2>&1 < /dev/null &'
