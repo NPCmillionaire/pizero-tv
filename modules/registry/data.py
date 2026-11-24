@@ -1,9 +1,10 @@
 """REGISTRY data: the FAA aircraft registry (from the govint-data release), cut down to a small lookup file."""
-import gzip, os, shutil, sqlite3, time
+import gzip, os, shutil, sqlite3, threading, time
 from dataclasses import dataclass
 
 RELEASE = "https://github.com/NPCmillionaire/govint-data/releases/download/faa/faa.sqlite.gz"
 MAX_AGE_S = 7 * 86400
+_BUILD = threading.Lock()      # a channel switched away and back must not start a second build mid-build
 REGISTRANT = {"1": "Individual", "2": "Partnership", "3": "Corporation", "4": "Co-owned", "5": "Government",
               "7": "LLC", "8": "Non-citizen corporation", "9": "Non-citizen co-owned"}
 KIND = {"1": "Glider", "2": "Balloon", "3": "Blimp", "4": "Single-engine airplane", "5": "Multi-engine airplane",
@@ -69,6 +70,11 @@ def build(src_sqlite, dest):
 def ensure(dest, download, now=None):
     """Keep dest at most a week old: download the gzipped release, build, delete the big file. Returns meta."""
     now = now or time.time()
+    with _BUILD:
+        return _ensure(dest, download, now)
+
+
+def _ensure(dest, download, now):
     if not (os.path.exists(dest) and now - os.path.getmtime(dest) < MAX_AGE_S):
         os.makedirs(os.path.dirname(dest), exist_ok=True)
         gz, raw = dest + ".src.gz", dest + ".src"
