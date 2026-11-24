@@ -13,15 +13,17 @@ from .geo import Projector
 from .replay import Replayer
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-MAP = (190, 36, 640, 560)
-RX0, RX1 = 870, 1250
+# computer-aided dispatch terminal: black screen, mono type, an inverted status bar, a call log
+SCREEN, TXT, DIMT, FAINT = (4, 5, 8), (222, 226, 232), (122, 130, 144), (44, 48, 56)
+MAP = (24, 74, 600, 552)
+RX0, RX1 = 650, 1256
 FADE_MIN = 60
 RIPPLE_S = 1.5
 QUEUE_SKIP = {"Passing Call"}      # officer drive-bys: counted and mapped, not listed
-PRI = {"A": theme.CORAL, "B": theme.SODIUM, "C": theme.SEAGLASS, "?": theme.LICHEN}
+PRI = {"A": (255, 64, 64), "B": (255, 200, 40), "C": (80, 200, 255), "?": DIMT}
 PRI_WORD = {"A": "emergency", "B": "urgent", "C": "routine"}
-LAND, HOOD_EDGE = (16, 41, 48), (24, 56, 64)
-ROADS = (("secondary", (27, 58, 66), 1), ("primary", (38, 74, 82), 1), ("motorway", (62, 100, 104), 2))
+LAND, HOOD_EDGE = (18, 20, 24), (40, 44, 52)
+ROADS = (("secondary", (34, 37, 43), 1), ("primary", (52, 56, 64), 1), ("motorway", (86, 92, 102), 2))
 
 
 def _fmt_dur(td):
@@ -34,6 +36,7 @@ class Dispatch(Module):
     blurb = "Live San Francisco police calls for service"
     aliases = ("dispatch", "sf")
     order = 72
+    footer_color = DIMT
 
     def start(self, ctx):
         super().start(ctx)
@@ -117,7 +120,7 @@ class Dispatch(Module):
             with open(os.path.join(HERE, "basemap.json")) as fh:
                 bm = json.load(fh)
             surf = pygame.Surface(MAP[2:])
-            surf.fill(theme.GROUND)
+            surf.fill(SCREEN)
             ox, oy = MAP[0], MAP[1]
             hoods = {}
             for hd in bm["hoods"]:
@@ -148,7 +151,7 @@ class Dispatch(Module):
             top = max(counts.values())
             for hood, n in counts.items():
                 for pts in self._hoods[hood]:
-                    pygame.draw.polygon(glow, (*self.key, int(3 + 20 * (n / top) ** 0.8)), pts)
+                    pygame.draw.polygon(glow, (255, 255, 255, int(3 + 18 * (n / top) ** 0.8)), pts)
             base.blit(glow, (0, 0))
         pins = pygame.Surface(MAP[2:], pygame.SRCALPHA)
         for c in self.shown:
@@ -158,82 +161,92 @@ class Dispatch(Module):
             age = (now - c.received).total_seconds() / 60
             a = int(max(46, 255 - 209 * min(1.0, age / FADE_MIN)))
             r = 1 if age > FADE_MIN else {"A": 4, "B": 3}.get(c.priority, 2)
-            pygame.draw.circle(pins, (*PRI.get(c.priority, theme.LICHEN), a), (p[0] - MAP[0], p[1] - MAP[1]), r)
+            pygame.draw.circle(pins, (*PRI.get(c.priority, DIMT), a), (p[0] - MAP[0], p[1] - MAP[1]), r)
         base.blit(pins, (0, 0))
         surf.blit(base, MAP[:2])
+        pygame.draw.rect(surf, FAINT, (MAP[0] - 1, MAP[1] - 1, MAP[2] + 2, MAP[3] + 2), 1)
         self._draw_rail(surf, now)
         self._draw_bottom(surf)
+
+    def draw_frame(self, surf):
+        surf.fill(SCREEN)
+        pygame.draw.rect(surf, TXT, (0, 18, 1280, 38))
 
     def _draw_rail(self, surf, now):
         st = self.src.status
         hour = [c for c in self.shown if now - c.received <= timedelta(hours=1)]
-        text.draw(surf, "Calls in the last hour", (RX0, 40), "sans", 20, theme.LICHEN)
-        hero = str(len(hour)) if self.shown else "—"
-        r = text.draw(surf, hero, (RX0 - 4, 62), "display", 150, theme.BONE)
         by = Counter(c.priority for c in hour)
-        y = 72
-        for p in "ABC":
-            pygame.draw.circle(surf, PRI[p], (r.right + 26, y + 13), 5)
-            text.draw(surf, f"{by.get(p, 0)} {PRI_WORD[p]}", (r.right + 38, y), "sans", 20, theme.BONE,
-                      max_w=RX1 - r.right - 40)
-            y += 34
-        y = 252
-        pygame.draw.line(surf, theme.TIDE, (RX0, y - 12), (RX1, y - 12), 1)
+        text.draw(surf, "SFPD calls for service", (24, 37), "mono-500", 22, SCREEN, anchor="midleft")
+        bar = (f"last hour {len(hour)}   A {by.get('A', 0)}   B {by.get('B', 0)}   C {by.get('C', 0)}   "
+               f"{now.strftime('%H:%M')}" if self.shown else now.strftime("%H:%M"))
+        text.draw(surf, bar, (1256, 37), "mono-500", 22, SCREEN, anchor="midright")
+        y = 74
+        text.draw(surf, "time  pri  call and location", (RX0, y), "mono", 18, DIMT)
+        y += 30
+        pygame.draw.line(surf, FAINT, (RX0, y - 6), (RX1, y - 6), 1)
         recent = self._recent()
+        self._cursor = (RX0, y)
         if not recent:
             msg = {"offline": "data.sf.gov isn't answering. Nothing is shown rather than a guess.",
                    "waiting": "Waiting for the first calls from data.sf.gov."}.get(st, "No calls yet.")
-            for i, line in enumerate(text.wrap(msg, "sans", 20, RX1 - RX0)):
-                text.draw(surf, line, (RX0, y + 4 + i * 28), "sans", 20, theme.LICHEN)
+            for i, line in enumerate(text.wrap(msg, "mono", 20, RX1 - RX0)):
+                text.draw(surf, line, (RX0, y + 4 + i * 28), "mono", 20, TXT)
+            self._cursor = (RX0, y + 8 + 28 * len(text.wrap(msg, "mono", 20, RX1 - RX0)))
+            return
         for i, c in enumerate(recent):
-            ry = y + i * 42
+            ry = y + i * 58
             if i == self.highlight:
-                pygame.draw.rect(surf, theme.TIDE, (RX0 - 10, ry - 4, RX1 - RX0 + 20, 40))
-            pygame.draw.circle(surf, PRI.get(c.priority, theme.LICHEN), (RX0 + 5, ry + 11), 5)
-            t = c.received.strftime("%H:%M")
-            text.draw(surf, t, (RX0 + 18, ry + 1), "sans", 17, theme.LICHEN)
-            text.draw(surf, c.type, (RX0 + 72, ry - 1), "sans-500", 20, theme.BONE, max_w=RX1 - RX0 - 72)
-            where = c.hood if c.hood != "Unknown" else "Location withheld"
+                pygame.draw.rect(surf, (28, 32, 40), (RX0 - 8, ry - 6, RX1 - RX0 + 16, 54))
+            col = PRI.get(c.priority, DIMT)
+            text.draw(surf, c.received.strftime("%H:%M"), (RX0, ry), "mono", 20, DIMT)
+            text.draw(surf, c.priority, (RX0 + 78, ry), "mono-500", 20, col)
+            text.draw(surf, c.type, (RX0 + 116, ry), "mono-500", 20, TXT, max_w=RX1 - RX0 - 116)
+            where = c.hood if c.hood != "Unknown" else "location withheld"
             if c.place and c.place.lower() != "not available":
-                where += ", " + c.place
-            text.draw(surf, where, (RX0 + 72, ry + 19), "sans", 16, theme.LICHEN, max_w=RX1 - RX0 - 72)
+                where += " / " + c.place
+            text.draw(surf, where, (RX0 + 116, ry + 24), "mono", 16, DIMT, max_w=RX1 - RX0 - 116)
+            self._cursor = (RX0, ry + 58)
 
     def _draw_bottom(self, surf):
         s = stats(self.shown) if self.shown else None
-        y = 612
+        y = 640
+        x = 24
         if s and s.top_hoods:
             busiest = ", ".join(f"{h} {n}" for h, n in s.top_hoods[:3])
-            text.draw(surf, "Busiest today: " + busiest, (190, y), "sans", 20, theme.BONE, max_w=650)
+            text.draw(surf, "busiest today: " + busiest, (x, y), "mono", 17, TXT, max_w=600)
         if s and s.top_types:
             common = ", ".join(f"{t.lower()} {n}" for t, n in s.top_types[:3])
-            text.draw(surf, "Most common: " + common, (190, y + 30), "sans", 20, theme.LICHEN, max_w=650)
+            text.draw(surf, "most common: " + common, (x, y + 24), "mono", 17, DIMT, max_w=600)
         if s and "A" in s.median_dispatch:
-            text.draw(surf, f"Emergencies dispatched in a median {_fmt_dur(s.median_dispatch['A'])}",
-                      (RX0, y), "sans", 20, theme.BONE, max_w=RX1 - RX0)
+            text.draw(surf, f"emergencies dispatched in a median {_fmt_dur(s.median_dispatch['A'])}",
+                      (RX0, y), "mono", 17, TXT, max_w=RX1 - RX0)
         if s and s.unplotted:
             text.draw(surf, f"{s.unplotted:,} of {s.total:,} calls have no public location",
-                      (RX0, y + 30), "sans", 16, theme.LICHEN, max_w=RX1 - RX0)
+                      (RX0, y + 24), "mono", 17, DIMT, max_w=RX1 - RX0)
 
     def draw_live(self, surf, t):
         self.active = [(c, t0) for c, t0 in self.active if t - t0 < RIPPLE_S]
         for p, phase in self._pulses:
             k = (math.sin(t * 3 + phase) + 1) / 2
-            pygame.draw.circle(surf, theme.CORAL, p, int(5 + 3 * k), 1)
+            pygame.draw.circle(surf, PRI["A"], p, int(5 + 3 * k), 1)
         for c, t0 in self.active:
             p = self.proj.to_px(c.lon, c.lat) if c.lon is not None else None
             k = (t - t0) / RIPPLE_S
             if p and 0 <= k < 1:
                 r = int(4 + 24 * k)
                 ring = pygame.Surface((2 * r + 4, 2 * r + 4), pygame.SRCALPHA)
-                pygame.draw.circle(ring, (*PRI.get(c.priority, theme.LICHEN), int(230 * (1 - k))),
+                pygame.draw.circle(ring, (*PRI.get(c.priority, DIMT), int(230 * (1 - k))),
                                    (r + 2, r + 2), r, 2)
                 surf.blit(ring, (p[0] - r - 2, p[1] - r - 2))
         recent = self._recent()
         if 0 <= self.highlight < len(recent) and recent[self.highlight].lon is not None:
             p = self.proj.to_px(recent[self.highlight].lon, recent[self.highlight].lat)
             if p:
-                pygame.draw.circle(surf, theme.BONE, p, int(11 + 2 * math.sin(t * 4)), 1)
-        return bool(self.active)    # ripples need 24 FPS; A-call pulses are fine at the idle rate
+                pygame.draw.circle(surf, TXT, p, int(11 + 2 * math.sin(t * 4)), 1)
+        cur = getattr(self, "_cursor", None)        # the terminal's block cursor, blinking under the log
+        if cur and int(t * 2) % 2 == 0 and cur[1] < 620:
+            pygame.draw.rect(surf, TXT, (cur[0], cur[1], 12, 20))
+        return bool(self.active)    # ripples need 24 FPS; the cursor and A-call pulses are fine at the idle rate
 
 
 MODULE = Dispatch
