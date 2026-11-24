@@ -1,4 +1,4 @@
-"""The display host: one window, one module at a time, splash in between."""
+"""The display host: one window, one module at a time, channel static in between."""
 import json, os, sys, time, traceback
 
 import pygame
@@ -6,7 +6,7 @@ import pygame
 from . import chrome, scenes
 from .module import Ctx
 
-SPLASH_MIN, READY_MAX, CRASH_S = 1.2, 8.0, 10.0
+STATIC_S, CRASH_S, OSD_S, OSD_FADE, DIGIT_S = 0.4, 10.0, 3.0, 0.5, 1.2
 FPS_ACTIVE, FPS_IDLE = 24, 8
 
 
@@ -24,6 +24,8 @@ class Host:
         self.crash_text, self.crash_name = "", ""
         self._footer = None
         self._standby_min = None
+        self.osd_t = -1e9
+        self._digits, self._digit_t = "", None
 
     # -- commands ------------------------------------------------------------
     def show(self, name, mode="show"):
@@ -32,7 +34,8 @@ class Host:
             raise KeyError(name)
         self._stop_current()
         self.cls, self.mode = cls, mode
-        self.phase, self.t_phase = "splash", self.clock()
+        self.phase, self.t_phase = "static", self.clock()
+        self.osd_t = self.t_phase
         self._footer = None
         try:
             self.current = cls()
@@ -59,6 +62,45 @@ class Host:
             return
         i = order.index(cur) + 1 if cur in order else 0
         self.show(order[i % len(order)], mode=self.mode if self.mode == "cycle" else "show")
+
+    def channel(self, n):
+        chans = self.registry.channels()
+        if not 0 <= n < len(chans):
+            raise IndexError(n)
+        self.show(chans[n].name, mode="show")
+
+    def _step_channel(self, delta):
+        chans = self.registry.channels()
+        if not chans:
+            return
+        cur = self.registry.number(self.cls.name) if self.cls else -delta
+        self.channel(((cur if cur is not None else 0) + delta) % len(chans))
+
+    def up(self):
+        self._step_channel(1)
+
+    def down(self):
+        self._step_channel(-1)
+
+    def digit(self, d):
+        """Remote-style entry: two digits within DIGIT_S make one channel number."""
+        self._digits += str(d)
+        self._digit_t = self.clock()
+        if len(self._digits) >= 2:
+            self._commit_digits()
+
+    def _commit_digits(self):
+        n, self._digits, self._digit_t = int(self._digits), "", None
+        try:
+            self.channel(n)
+        except IndexError:
+            pass
+
+    def osd_alpha(self, now):
+        e = now - self.osd_t
+        if e <= OSD_S:
+            return 255
+        return max(0, int(255 * (1 - (e - OSD_S) / OSD_FADE)))
 
     def standby(self):
         self._stop_current()
@@ -92,6 +134,15 @@ class Host:
                 self.show(args[0])
             elif cmd == "next":
                 self.next()
+            elif cmd == "up":
+                self.up()
+            elif cmd == "down":
+                self.down()
+            elif cmd == "ch" and args and args[0].isdigit():
+                try:
+                    self.channel(int(args[0]))
+                except IndexError:
+                    return f"error: no channel {args[0]}"
             elif cmd == "cycle":
                 secs = int(args[0]) if args and args[0].isdigit() else None
                 self.cycle(secs, args[1:] if secs else args or None)
@@ -104,8 +155,8 @@ class Host:
             elif cmd == "status":
                 return json.dumps(self.status())
             elif cmd == "list":
-                return json.dumps([{"name": c.name, "title": c.title, "blurb": c.blurb, "aliases": list(c.aliases)}
-                                   for c in self.registry.classes()])
+                return json.dumps([{"ch": i, "name": c.name, "title": c.title, "blurb": c.blurb,
+                                    "aliases": list(c.aliases)} for i, c in enumerate(self.registry.channels())])
             else:
                 return f"error: unknown command {line}"
         except KeyError as e:
@@ -115,10 +166,18 @@ class Host:
     def status(self):
         st, age = self.current.status() if (self.current and self.phase == "module") else (None, None)
         return {"mode": self.mode, "phase": self.phase, "module": self.cls.name if self.cls else None,
+                "channel": self.registry.number(self.cls.name) if self.cls else None,
                 "since_s": round(self.clock() - self.t_phase, 1), "cycle_seconds": self.cycle_seconds,
                 "cycle_names": self.cycle_names, "data": st, "data_age_s": age}
 
     def key(self, event):
+        k = event.key
+        if k in (pygame.K_UP, pygame.K_PAGEUP):
+            return self.up()
+        if k in (pygame.K_DOWN, pygame.K_PAGEDOWN):
+            return self.down()
+        if pygame.K_0 <= k <= pygame.K_9:
+            return self.digit(k - pygame.K_0)
         if self.current and self.phase == "module":
             try:
                 self.current.on_key(event)
@@ -128,25 +187,34 @@ class Host:
     # -- frame ---------------------------------------------------------------
     def step(self):
         now = self.clock()
-        if self.phase == "splash":
+        if self._digit_t is not None and now - self._digit_t >= DIGIT_S:
+            self._commit_digits()
+        if self.phase == "static":
             elapsed = now - self.t_phase
-            ready = self._safe(lambda: self.current.ready, default=True) if self.current else True
-            if elapsed >= SPLASH_MIN and (ready or elapsed >= READY_MAX):
-                self.phase, self.t_shown = "module", now
-                self.current.dirty = True
-            else:
-                scenes.splash(self.screen, self.cls, elapsed)
+            if elapsed < STATIC_S:
+                scenes.static(self.screen, elapsed)
                 return FPS_ACTIVE
+            self.phase, self.t_shown = "module", now
+            if self.current:
+                self.current.dirty = True
         if self.phase == "module":
             if self.mode == "cycle" and now - self.t_shown >= self.cycle_seconds:
                 self.next()
                 return FPS_ACTIVE
+            if getattr(self.current, "external", False):
+                return 2                      # an external player owns the screen
             try:
                 self._draw_module(now)
-                fps = getattr(self.current, "fps", FPS_ACTIVE)
-                return fps if self.current.draw_live(self.screen, now) else FPS_IDLE
+                moving = self.current.draw_live(self.screen, now)
             except Exception:
                 self._crash(traceback.format_exc())
+                return FPS_IDLE
+            a = self.osd_alpha(now)
+            if a:
+                scenes.osd(self.screen, self.registry.number(self.cls.name), self.cls.title, a)
+            if 0 < a < 255:
+                return FPS_ACTIVE
+            return getattr(self.current, "fps", FPS_ACTIVE) if moving else FPS_IDLE
         if self.phase == "crash":
             left = CRASH_S - (now - self.t_phase)
             if left <= 0:
@@ -174,13 +242,6 @@ class Host:
     # -- helpers -------------------------------------------------------------
     def _order(self):
         return self.cycle_names or self.registry.names()
-
-    def _safe(self, fn, default=None):
-        try:
-            return fn()
-        except Exception:
-            self._crash(traceback.format_exc())
-            return default
 
     def _crash(self, tb):
         print(tb, file=sys.stderr, flush=True)

@@ -18,7 +18,7 @@ class Ctx:
 class Module:
     name = ""
     title = ""            # spine text, one word, caps
-    blurb = ""            # one line for the splash
+    blurb = ""            # one line for the guide
     key = theme.SODIUM    # spine / accent color
     aliases = ()
     order = 100           # position in the default cycle

@@ -6,8 +6,10 @@ from . import control
 HELP = """usage: tv [-H HOST] <command>
 
   tv                     what's on screen
-  tv <module>            show a module (see tv list)
-  tv next                skip to the next module
+  tv <module>            tune to a channel by name (see tv list)
+  tv <number>            tune to a channel by number (tv 0 is the guide)
+  tv up | tv down        flip channels
+  tv next                skip to the next channel in the rotation
   tv cycle [SEC] [M...]  rotate through modules (default: all, every 90 s)
   tv stop                standby screen
   tv list                installed modules
@@ -30,8 +32,12 @@ def to_command(args, reg):
     if not args or args[0] == "status":
         return "status"
     cmd, rest = args[0], args[1:]
-    if cmd in ("next", "stop", "reload"):
+    if cmd in ("next", "stop", "reload", "up", "down"):
         return cmd
+    if cmd.isdigit():
+        return f"ch {int(cmd)}"
+    if cmd == "ch" and rest and rest[0].isdigit():
+        return f"ch {int(rest[0])}"
     if cmd == "cycle":
         return " ".join(["cycle", *[_module(a, reg) if not a.isdigit() else a for a in rest]])
     if cmd == "show":
@@ -62,8 +68,9 @@ def _pretty(status):
     s = json.loads(status)
     if s["phase"] == "standby":
         return "Standby (nothing on screen)."
-    what = {"splash": "loading", "crash": "crashed, moving on"}.get(s["phase"], "on screen")
-    line = f"{s['module']} — {what} for {int(s['since_s'])} s"
+    what = {"static": "tuning in", "crash": "crashed, moving on"}.get(s["phase"], "on screen")
+    ch = f"channel {s['channel']:02d}, " if s.get("channel") is not None else ""
+    line = f"{ch}{s['module']} — {what} for {int(s['since_s'])} s"
     if s["mode"] == "cycle":
         names = s["cycle_names"] or ["all modules"]
         line += f"; cycling every {s['cycle_seconds']} s through {', '.join(names)}"
@@ -80,7 +87,7 @@ def _start():
     with open(LOG, "ab") as log:
         subprocess.Popen([sys.executable, "-m", "tvkit"], cwd=ROOT, env=env, stdout=log, stderr=log,
                          stdin=subprocess.DEVNULL, start_new_session=True)
-    print("Display host starting; the TV shows the splash in a few seconds.")
+    print("Display host starting; the TV tunes in within a few seconds.")
     return 0
 
 
@@ -117,9 +124,9 @@ def main(argv=None, reg=None):
         from . import registry
         reg = registry.discover()
     if args[:1] == ["list"]:
-        for c in reg.classes():
+        for i, c in enumerate(reg.channels()):
             alias = f"  (also: {', '.join(c.aliases)})" if c.aliases else ""
-            print(f"{c.name:<12} {c.blurb}{alias}")
+            print(f"{i:02d}  {c.name:<14} {c.blurb}{alias}")
         return 0
     try:
         line = to_command(args, reg)

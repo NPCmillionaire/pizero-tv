@@ -21,6 +21,14 @@ class Registry:
     def classes(self):
         return list(self._classes)
 
+    def channels(self):
+        """Modules in channel order: channel N is channels()[N]."""
+        return list(self._classes)
+
+    def number(self, name):
+        cls = self.get(name)
+        return self._classes.index(cls) if cls in self._classes else None
+
 
 def discover(root=None, package="modules"):
     root = root or os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "modules")
@@ -30,7 +38,8 @@ def discover(root=None, package="modules"):
             continue
         try:
             m = importlib.import_module(f"{package}.{d}")
-            reg.add(m.MODULE)
+            for cls in getattr(m, "MODULES", None) or [m.MODULE]:
+                reg.add(cls)
         except Exception:
             reg.errors[d] = traceback.format_exc()
             print(f"registry: skipping {d}:\n{reg.errors[d]}", file=sys.stderr)

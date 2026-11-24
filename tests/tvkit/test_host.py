@@ -75,24 +75,87 @@ def run(h, clock, seconds, dt=0.1):
         h.step()
 
 
-def test_show_runs_splash_then_module():
+def test_show_runs_static_then_module():
     Counting.starts = 0
     h, c = make(Counting)
     h.show("count")
-    assert h.phase == "splash"
-    run(h, c, 1.0)
-    assert h.phase == "splash"            # held at least 1.2 s
-    run(h, c, 0.4)
-    assert h.phase == "module" and Counting.starts == 1
+    assert h.phase == "static" and Counting.starts == 1     # data starts loading under the static
+    run(h, c, 0.3)
+    assert h.phase == "static"
+    run(h, c, 0.2)
+    assert h.phase == "module"
 
 
-def test_splash_waits_for_ready_up_to_8s():
+def test_module_shown_before_ready():
     h, c = make(Slow)
     h.show("slow")
-    run(h, c, 7.5)
-    assert h.phase == "splash"
-    run(h, c, 0.7)
+    run(h, c, 0.6)
     assert h.phase == "module"
+
+
+def test_channel_numbers_follow_order():
+    a, b, cc = mod("aa", order=1), mod("bb", order=2), mod("cc", order=3)
+    h, _ = make(a, b, cc)
+    assert [x.name for x in h.registry.channels()] == ["aa", "bb", "cc"] and h.registry.number("bb") == 1
+
+
+def test_up_down_wrap():
+    a, b, cc = mod("aa", order=1), mod("bb", order=2), mod("cc", order=3)
+    h, c = make(a, b, cc)
+    h.show("aa")
+    h.up()
+    assert h.cls.name == "bb"
+    h.down()
+    h.down()
+    assert h.cls.name == "cc"
+    h.up()
+    assert h.cls.name == "aa"
+
+
+def test_channel_by_number():
+    a, b = mod("aa", order=1), mod("bb", order=2)
+    h, _ = make(a, b)
+    assert h.handle("ch 1") == "ok" and h.cls.name == "bb"
+    assert h.handle("ch 9").startswith("error: no channel 9")
+
+
+def test_two_digit_entry():
+    mods = [mod(f"m{i:02d}", order=i) for i in range(13)]
+    h, c = make(*mods)
+    h.show("m00")
+    h.digit(1)
+    run(h, c, 0.5)
+    h.digit(2)
+    run(h, c, 0.2)
+    assert h.cls.name == "m12"
+
+
+def test_single_digit_commits_after_window():
+    mods = [mod(f"m{i:02d}", order=i) for i in range(13)]
+    h, c = make(*mods)
+    h.show("m00")
+    h.digit(7)
+    run(h, c, 1.0)
+    assert h.cls.name == "m00"
+    run(h, c, 0.4)
+    assert h.cls.name == "m07"
+
+
+def test_osd_visible_3s_then_fades():
+    h, c = make(mod("aa"))
+    h.show("aa")
+    t0 = c.t
+    assert h.osd_alpha(t0 + 1.0) == 255 and h.osd_alpha(t0 + 3.25) < 255 and h.osd_alpha(t0 + 4.0) == 0
+
+
+def test_external_module_idles_host():
+    class Ext(Module):
+        name, title, blurb = "ext", "EXT", "x"
+        external = True
+    h, c = make(Ext)
+    h.show("ext")
+    run(h, c, 1.0)
+    assert h.step() == 2
 
 
 def test_switch_stops_previous_sources():

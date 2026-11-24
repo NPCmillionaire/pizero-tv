@@ -1,38 +1,38 @@
-"""Scenes the host draws itself: splash between modules, crash notice, standby."""
+"""Scenes the host draws itself: static between channels, OSD, crash notice, standby."""
 import math, textwrap, time
 
+import numpy as np
 import pygame
 
 from . import text, theme
 
-REPO = "github.com/NPCmillionaire/pizero-tv"
 
 
-def _title_size(title, max_w):
-    size = 260
-    while size > 60 and text.font("display", size).size(title)[0] > max_w:
-        size -= 10
-    return size
+OSD_GREEN = (124, 255, 107)
+_rng = np.random.default_rng()
 
 
-def splash(surf, cls, elapsed):
-    """The module's spine title, unfolded: huge, horizontal, in its key color."""
-    surf.fill(theme.GROUND)
-    text.draw(surf, "legitbiz.research", (80, 60), "sans-600", 24, theme.BONE)
-    size = _title_size(cls.title, theme.W - 160)
-    # settle in: rise 24 px and fade from the ground color over 500 ms
-    k = min(1.0, elapsed / 0.5)
-    ease = 1 - (1 - k) ** 3
-    col = theme.mix(theme.GROUND, cls.key, ease)
-    r = text.draw(surf, cls.title, (72, 380 - int(24 * (1 - ease))), "display", size, col, anchor="midleft")
-    text.draw(surf, cls.blurb, (80, r.bottom + 6), "sans", 26, theme.mix(theme.GROUND, theme.LICHEN, ease),
-              max_w=theme.W - 160)
-    text.draw(surf, REPO, (80, theme.H - 52), "mono", 16, theme.LICHEN)
-    # indeterminate loading hairline: a key-colored segment sweeping the bottom edge
-    span = theme.W - 160
-    x = 80 + int((math.sin(elapsed * 2.2) + 1) / 2 * (span - 160))
-    pygame.draw.line(surf, theme.TIDE, (80, theme.H - 24), (theme.W - 80, theme.H - 24), 2)
-    pygame.draw.line(surf, cls.key, (x, theme.H - 24), (x + 160, theme.H - 24), 2)
+def static(surf, elapsed):
+    """Analog snow with a rolling bright bar — the gap between channels."""
+    noise = _rng.integers(0, 256, (160, 90), dtype=np.uint8)
+    bar = int((elapsed * 900) % 90)
+    noise[:, max(0, bar - 6):bar] = np.minimum(255, noise[:, max(0, bar - 6):bar].astype(np.int16) + 90).astype(np.uint8)
+    rgb = np.repeat(noise[:, :, None], 3, axis=2)
+    rgb[:, :, 2] = np.minimum(255, rgb[:, :, 2].astype(np.int16) + 18).astype(np.uint8)   # cold CRT tint
+    surf.blit(pygame.transform.scale(pygame.surfarray.make_surface(rgb), surf.get_size()), (0, 0))
+
+
+def osd(surf, number, title, alpha=255):
+    """Old-TV on-screen display, top right: CH 04  MARKETS."""
+    label = f"CH {number:02d}  {title}" if number is not None else title
+    img = text.render(label, "mono-500", 34, OSD_GREEN)
+    pad = 14
+    box = pygame.Surface((img.get_width() + 2 * pad, img.get_height() + pad), pygame.SRCALPHA)
+    box.fill((0, 0, 0, int(150 * alpha / 255)))
+    img = img.copy()
+    img.set_alpha(alpha)
+    box.blit(img, (pad, pad // 2))
+    surf.blit(box, (theme.W - box.get_width() - 30, 26))
 
 
 def crash(surf, name, message, remaining):

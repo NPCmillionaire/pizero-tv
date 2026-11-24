@@ -31,7 +31,7 @@ def test_cli_remote_quotes_args():
 
 def test_cli_unknown_module_lists_choices(reg):
     with pytest.raises(cli.Usage) as e:
-        cli.to_command(["gamma"], reg)
+        cli.to_command(["omega"], reg)
     assert "alpha" in str(e.value) and "beta" in str(e.value)
 
 
@@ -50,3 +50,8 @@ def test_cli_status_pretty(reg, monkeypatch, capsys):
     assert cli.main([], reg=reg) == 0
     out = capsys.readouterr().out
     assert "alpha" in out and "cycling every 90 s" in out
+
+
+def test_cli_up_down_numbers(reg):
+    assert cli.to_command(["up"], reg) == "up" and cli.to_command(["down"], reg) == "down"
+    assert cli.to_command(["7"], reg) == "ch 7" and cli.to_command(["ch", "12"], reg) == "ch 12"
