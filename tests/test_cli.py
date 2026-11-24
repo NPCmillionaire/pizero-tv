@@ -69,3 +69,24 @@ def test_cli_does_not_import_modules_for_remote_keys(monkeypatch):
     for args in (["up"], ["digit", "3"], ["7"], ["weather"], ["next"]):
         assert cli.main(args) == 0
     assert sent == ["up", "digit 3", "ch 7", "show weather", "next"]
+
+
+def test_start_uses_the_systemd_service_when_installed(monkeypatch, tmp_path):
+    from tvkit import cli
+    unit = tmp_path / "pizero-tv.service"
+    unit.write_text("[Service]\n")
+    calls = []
+    monkeypatch.setattr(cli, "UNIT", str(unit))
+    monkeypatch.setattr(cli.subprocess, "call", lambda argv, **k: calls.append(argv) or 0)
+    monkeypatch.setattr(cli.subprocess, "Popen", lambda *a, **k: calls.append("popen"))
+    assert cli._start() == 0
+    assert calls == [["systemctl", "--user", "start", "pizero-tv.service"]]
+
+
+def test_service_restarts_forever_outside_any_ssh_session():
+    import configparser, os
+    p = configparser.ConfigParser(strict=False, interpolation=None)
+    p.read(os.path.join(os.path.dirname(__file__), "..", "systemd", "pizero-tv.service"))
+    assert p["Service"]["Restart"] == "always"
+    assert p["Unit"]["StartLimitIntervalSec"] == "0"
+    assert p["Install"]["WantedBy"] == "default.target"

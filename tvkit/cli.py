@@ -24,6 +24,7 @@ HELP = """usage: tv [-H HOST] <command>
 REMOTE_TV = "~/pizero-tv/bin/tv"
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 LOG = os.path.expanduser("~/.local/state/pizero-tv/tvd.log")
+UNIT = os.path.expanduser("~/.config/systemd/user/pizero-tv.service")
 
 
 class Usage(Exception):
@@ -87,6 +88,11 @@ def _pretty(status):
 
 
 def _start():
+    if os.path.exists(UNIT):          # deploy.sh installs the service: systemd keeps the host alive
+        r = subprocess.call(["systemctl", "--user", "start", "pizero-tv.service"])
+        if r == 0:
+            print("Display host starting; the TV tunes in within a few seconds.")
+        return r
     env = dict(os.environ)
     env.setdefault("XDG_RUNTIME_DIR", f"/run/user/{os.getuid()}")
     env.setdefault("WAYLAND_DISPLAY", "wayland-0")

@@ -1,0 +1,21 @@
+# pizero-tv display host, run by your user's systemd (not by any login or ssh session),
+# so a dropped ssh connection never takes the TV down, and a crash restarts it in 3 s.
+#   systemctl --user status pizero-tv      tv logs      systemctl --user restart pizero-tv
+[Unit]
+Description=pizero-tv display host
+StartLimitIntervalSec=0
+
+[Service]
+Environment=XDG_RUNTIME_DIR=%t WAYLAND_DISPLAY=wayland-0 SDL_VIDEODRIVER=wayland PYTHONUNBUFFERED=1
+WorkingDirectory=%h/pizero-tv
+# wait for the desktop's Wayland display (at boot the user manager starts before labwc)
+ExecStartPre=/bin/sh -c 'mkdir -p %h/.local/state/pizero-tv; i=0; until [ -S "$XDG_RUNTIME_DIR/$WAYLAND_DISPLAY" ]; do i=$((i+1)); [ $i -gt 300 ] && exit 1; sleep 1; done'
+ExecStart=/usr/bin/python3 -m tvkit
+StandardOutput=append:%h/.local/state/pizero-tv/tvd.log
+StandardError=inherit
+Restart=always
+RestartSec=3
+TimeoutStopSec=8
+
+[Install]
+WantedBy=default.target

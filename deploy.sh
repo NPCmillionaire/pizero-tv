@@ -2,7 +2,8 @@
 # Install or update pizero-tv on a Pi:   ./deploy.sh [host]   (default: pizero)
 #
 # Copies the suite to <host>:~/pizero-tv, links `tv` into ~/.local/bin, installs the
-# autostart entry, and restarts the display host. The old ~/tv install is left in place;
+# systemd user service (pizero-tv.service: survives ssh drops, restarts on crashes) and
+# restarts the display host. The old ~/tv install is left in place;
 # its ~/.local/bin shortcuts are moved to ~/.local/bin/gemini-archive/ the first time.
 set -euo pipefail
 HOST=${1:-pizero}
@@ -17,7 +18,7 @@ rsync -az --delete \
 # leave the install half done.
 ssh -o ConnectTimeout=10 "$HOST" 'cat > /tmp/pizero-tv-install.sh <<"EOS"
 set -u
-mkdir -p ~/.local/bin ~/.config/autostart ~/.local/state/pizero-tv ~/.config/pizero-tv
+mkdir -p ~/.local/bin ~/.config/systemd/user ~/.local/state/pizero-tv ~/.config/pizero-tv
 if [ -L ~/.local/bin/tv ] && [ "$(readlink ~/.local/bin/tv)" != "$HOME/pizero-tv/bin/tv" ]; then
   mkdir -p ~/.local/bin/gemini-archive
   for l in ~/.local/bin/*; do
@@ -27,16 +28,22 @@ fi
 ln -sfn ~/pizero-tv/bin/tv ~/.local/bin/tv
 command -v mpv >/dev/null || echo "note: video channels need mpv (sudo apt install -y mpv)"
 [ -x ~/.local/bin/yt-dlp ] || command -v yt-dlp >/dev/null || echo "note: video channels need yt-dlp in ~/.local/bin"
-cp ~/pizero-tv/autostart/pizero-tv.desktop ~/.config/autostart/
 [ -f ~/.config/pizero-tv/config.toml ] || cp ~/pizero-tv/config.example.toml ~/.config/pizero-tv/config.toml
 [ -x ~/tv/tv ] && ~/tv/tv stop >/dev/null 2>&1
-old=$(pgrep -f "^/usr/bin/python3 -m tvkit|^python3 -m tvkit")
-if [ -n "$old" ]; then
-  kill $old
-  for i in $(seq 1 30); do kill -0 $old 2>/dev/null || break; sleep 0.5; done
-  sleep 5                               # lwrespawn (if it started the host) brings it back
+# the old desktop autostart entry is replaced by the service (kept in the archive, not deleted)
+if [ -f ~/.config/autostart/pizero-tv.desktop ]; then
+  mkdir -p ~/.local/share/pizero-tv/archive && mv ~/.config/autostart/pizero-tv.desktop ~/.local/share/pizero-tv/archive/
 fi
-pgrep -f "python3 -m tvkit" >/dev/null || ~/pizero-tv/bin/tv start
+cp ~/pizero-tv/systemd/pizero-tv.service ~/.config/systemd/user/
+systemctl --user daemon-reload
+systemctl --user enable pizero-tv.service
+# stop any host not started by systemd (old installs, `tv start` before the service existed)
+for pid in $(pgrep -f "^/usr/bin/python3 -m tvkit|^python3 -m tvkit"); do
+  grep -q pizero-tv.service /proc/$pid/cgroup 2>/dev/null || kill $pid
+done
+pkill -f "^/bin/sh /usr/bin/lwrespawn sh -c .*tvkit" 2>/dev/null
+sleep 2
+systemctl --user restart pizero-tv.service
 echo "install finished $(date)"
 EOS
 setsid nohup bash /tmp/pizero-tv-install.sh > /tmp/pizero-tv-install.log 2>&1 < /dev/null &'
